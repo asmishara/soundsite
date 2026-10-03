@@ -1,10 +1,12 @@
 import { useRef, type PointerEvent } from 'react'
 import { engine } from '../../audio/engine'
 import { useFollowPlayhead } from '../../hooks/useFollowPlayhead'
+import { emptyDrumSteps } from '../../model/factory'
+import { partPattern } from '../../model/arrangement'
 import { ACCENT_VELOCITY, DRUM_VOICES, NORMAL_VELOCITY } from '../../model/presets'
-import { STEPS_PER_BAR, STEPS_PER_BEAT, type DrumTrack, type DrumVoiceId } from '../../model/types'
+import { STEPS_PER_BAR, STEPS_PER_BEAT, type DrumTrack, type DrumVoiceId, type Section } from '../../model/types'
 import { usePlayheadStore } from '../../state/playheadStore'
-import { useSongStore } from '../../state/songStore'
+import { useSongStore, type PartRef } from '../../state/songStore'
 import { useUiStore } from '../../state/uiStore'
 import { Playhead } from '../PianoRoll/Playhead'
 import { Ruler } from '../PianoRoll/Ruler'
@@ -14,22 +16,25 @@ const LABEL_WIDTH = 104
 const ROW_HEIGHT = 32
 const HEADER_HEIGHT = 26
 
-function PlayheadColumn({ cellWidth }: { cellWidth: number }) {
-  const step = usePlayheadStore((s) => s.step)
+function PlayheadColumn({ cellWidth, sectionId }: { cellWidth: number; sectionId: string }) {
+  const step = usePlayheadStore((s) => (s.sectionId === sectionId ? s.step : -1))
   if (step < 0) return null
   return <div className={styles.playColumn} style={{ width: cellWidth, transform: `translateX(${step * cellWidth}px)` }} />
 }
 
-export function StepSequencer({ track }: { track: DrumTrack }) {
+/** Drum grid for one drum track within one section. */
+export function StepSequencer({ track, section }: { track: DrumTrack; section: Section }) {
   const zoom = useUiStore((s) => s.zoom)
-  const bars = useSongStore((s) => s.song.bars)
+  const bars = section.bars
   const cellWidth = Math.max(zoom, 18)
   const total = bars * STEPS_PER_BAR
+  const part: PartRef = { trackId: track.id, sectionId: section.id }
+  const pattern = partPattern(track, section.id) ?? emptyDrumSteps(bars)
   const gridRef = useRef<HTMLDivElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const paint = useRef<{ value: number; last: { voice: DrumVoiceId; step: number } } | null>(null)
 
-  useFollowPlayhead(scrollerRef, cellWidth, LABEL_WIDTH)
+  useFollowPlayhead(scrollerRef, cellWidth, LABEL_WIDTH, section.id)
 
   const cellAt = (e: { clientX: number; clientY: number }) => {
     const rect = gridRef.current!.getBoundingClientRect()
@@ -47,7 +52,7 @@ export function StepSequencer({ track }: { track: DrumTrack }) {
     // Read live state rather than props so rapid clicks never act on a stale render.
     const live = useSongStore.getState().song.tracks.find((t) => t.id === track.id)
     if (live?.kind !== 'drums') return
-    const current = live.steps[cell.voice][cell.step]
+    const current = partPattern(live, section.id)?.[cell.voice][cell.step] ?? 0
     const value = e.shiftKey
       ? current === ACCENT_VELOCITY
         ? NORMAL_VELOCITY
@@ -57,7 +62,7 @@ export function StepSequencer({ track }: { track: DrumTrack }) {
         : NORMAL_VELOCITY
     const store = useSongStore.getState()
     store.beginTransaction()
-    store.setDrumStep(track.id, cell.voice, cell.step, value)
+    store.setDrumStep(part, cell.voice, cell.step, value)
     if (value > 0) void engine.preview(track.id, cell.voice, value)
     paint.current = { value, last: cell }
   }
@@ -71,8 +76,8 @@ export function StepSequencer({ track }: { track: DrumTrack }) {
     // Fill any steps skipped by a fast drag along the same row.
     const from = cell.voice === p.last.voice ? p.last.step : cell.step
     const dir = Math.sign(cell.step - from)
-    for (let s = from + dir; s !== cell.step; s += dir) store.setDrumStep(track.id, cell.voice, s, p.value)
-    store.setDrumStep(track.id, cell.voice, cell.step, p.value)
+    for (let s = from + dir; s !== cell.step; s += dir) store.setDrumStep(part, cell.voice, s, p.value)
+    store.setDrumStep(part, cell.voice, cell.step, p.value)
     p.last = cell
   }
 
@@ -90,7 +95,7 @@ export function StepSequencer({ track }: { track: DrumTrack }) {
             <div className={styles.corner} style={{ width: LABEL_WIDTH }} />
             <div className={styles.ruler} style={{ width: total * cellWidth }}>
               <Ruler bars={bars} zoom={cellWidth} />
-              <Playhead zoom={cellWidth} variant="marker" />
+              <Playhead zoom={cellWidth} sectionId={section.id} variant="marker" />
             </div>
           </div>
           <div className={styles.body}>
@@ -122,7 +127,7 @@ export function StepSequencer({ track }: { track: DrumTrack }) {
               onPointerCancel={onPointerUp}
             >
               {DRUM_VOICES.map((v) =>
-                track.steps[v.id].map((velocity, step) => {
+                pattern[v.id].map((velocity, step) => {
                   const beat = Math.floor(step / STEPS_PER_BEAT)
                   const classes = [styles.cell]
                   if (beat % 2 === 1) classes.push(styles.cellAltBeat)
@@ -139,7 +144,7 @@ export function StepSequencer({ track }: { track: DrumTrack }) {
                   )
                 }),
               )}
-              <PlayheadColumn cellWidth={cellWidth} />
+              <PlayheadColumn cellWidth={cellWidth} sectionId={section.id} />
             </div>
           </div>
         </div>

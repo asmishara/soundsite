@@ -3,6 +3,9 @@ import type { ChordInfo, ChordQuality } from '../model/music'
 
 export type Tool = 'draw' | 'select'
 export type ChordMode = 'off' | 'diatonic3' | 'diatonic4' | ChordQuality
+/** Loop the selected section, or play the whole arrangement. */
+export type PlayMode = 'section' | 'song'
+export type ExportKind = 'wav' | 'midi'
 
 /** Grid options in 16th-note steps. */
 export const SNAP_OPTIONS = [
@@ -25,6 +28,15 @@ export const MAX_ZOOM = 56
 
 type UiState = {
   selectedTrackId: string | null
+  /** The section being edited */
+  selectedSectionId: string | null
+  /** The arrangement block it was selected from (decides where song playback starts) */
+  selectedEntryId: string | null
+  /** Where playback starts, in steps from the start of the selected section */
+  startStep: number
+  playMode: PlayMode
+  /** Export in progress, if any */
+  exporting: ExportKind | null
   tool: Tool
   /** Grid snap in steps */
   snap: number
@@ -44,6 +56,11 @@ type UiState = {
   notice: Notice | null
 
   selectTrack: (id: string | null) => void
+  /** Selects an arrangement block and the section it plays. */
+  selectEntry: (entryId: string, sectionId: string, startStep?: number) => void
+  setStartStep: (step: number) => void
+  setPlayMode: (mode: PlayMode) => void
+  setExporting: (kind: ExportKind | null) => void
   setTool: (tool: Tool) => void
   setSnap: (steps: number) => void
   setNoteLength: (steps: number) => void
@@ -63,6 +80,11 @@ let noticeId = 0
 
 export const useUiStore = create<UiState>()((set) => ({
   selectedTrackId: null,
+  selectedSectionId: null,
+  selectedEntryId: null,
+  startStep: 0,
+  playMode: 'section',
+  exporting: null,
   tool: 'draw',
   snap: 1,
   noteLength: 4,
@@ -78,6 +100,20 @@ export const useUiStore = create<UiState>()((set) => ({
   notice: null,
 
   selectTrack: (id) => set((s) => (s.selectedTrackId === id ? s : { selectedTrackId: id, selectedNoteIds: [] })),
+  selectEntry: (entryId, sectionId, startStep) =>
+    set((s) => {
+      const sectionChanged = s.selectedSectionId !== sectionId
+      return {
+        selectedEntryId: entryId,
+        selectedSectionId: sectionId,
+        // Note selection and the start marker belong to the section being edited.
+        selectedNoteIds: sectionChanged ? [] : s.selectedNoteIds,
+        startStep: startStep ?? (sectionChanged ? 0 : s.startStep),
+      }
+    }),
+  setStartStep: (startStep) => set({ startStep: Math.max(0, startStep) }),
+  setPlayMode: (playMode) => set({ playMode }),
+  setExporting: (exporting) => set({ exporting }),
   setTool: (tool) => set({ tool }),
   setSnap: (snap) => set({ snap }),
   setNoteLength: (noteLength) => set({ noteLength }),

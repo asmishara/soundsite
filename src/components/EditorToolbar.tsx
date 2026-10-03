@@ -1,6 +1,6 @@
 import { CHORD_QUALITIES, CHORD_QUALITY_IDS } from '../model/music'
 import { INSTRUMENT_PRESETS, INSTRUMENT_PRESET_IDS } from '../model/presets'
-import type { InstrumentPresetId, Track } from '../model/types'
+import type { InstrumentPresetId, Section, Track } from '../model/types'
 import { useSongStore } from '../state/songStore'
 import { SNAP_OPTIONS, useUiStore, type ChordMode } from '../state/uiStore'
 import { CursorIcon, MagnetIcon, PencilIcon, ZoomInIcon, ZoomOutIcon } from './common/icons'
@@ -33,15 +33,25 @@ function ZoomControls() {
   )
 }
 
-export function EditorToolbar({ track }: { track: Track }) {
+/** "Lead · in Verse": which track and which section the editor below is showing. */
+function Title({ track, section }: { track: Track; section: Section }) {
+  return (
+    <div className={styles.title} style={{ ['--track-color' as string]: track.color }}>
+      {track.name}
+      <span className={styles.inSection} style={{ ['--section-color' as string]: section.color }}>
+        in {section.name}
+      </span>
+    </div>
+  )
+}
+
+export function EditorToolbar({ track, section }: { track: Track; section: Section }) {
   const ui = useUiStore()
 
   if (track.kind === 'drums') {
     return (
       <div className={styles.bar}>
-        <div className={styles.title} style={{ ['--track-color' as string]: track.color }}>
-          {track.name}
-        </div>
+        <Title track={track} section={section} />
         <span className={styles.help}>
           Click a cell to toggle · drag to paint · <kbd>Shift</kbd>+click for an accent · click a name to audition
         </span>
@@ -55,9 +65,7 @@ export function EditorToolbar({ track }: { track: Track }) {
 
   return (
     <div className={styles.bar}>
-      <div className={styles.title} style={{ ['--track-color' as string]: track.color }}>
-        {track.name}
-      </div>
+      <Title track={track} section={section} />
 
       <select
         className="control"

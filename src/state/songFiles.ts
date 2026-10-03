@@ -1,20 +1,33 @@
-import { stop } from '../audio/scheduler'
+import { isPlaying, stop } from '../audio/scheduler'
 import { createDemoSong } from '../model/demoSong'
 import { createNewSong } from '../model/factory'
-import { FILE_EXTENSION, SongFileError, parseSong, serializeSong, songFileName } from '../model/serialize'
+import { FILE_EXTENSION, SongFileError, parseSong, serializeSong, songFileName, songSlug } from '../model/serialize'
 import type { Song } from '../model/types'
-import { usePlayheadStore } from './playheadStore'
 import { useSongStore } from './songStore'
 import { useUiStore } from './uiStore'
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 /** Swaps in a song as one undoable step and offers Undo in a toast. */
 function switchTo(song: Song, message: string): void {
-  if (usePlayheadStore.getState().isPlaying) stop()
+  if (isPlaying()) stop()
   useSongStore.getState().replaceSong(song)
-  useUiStore.getState().selectTrack(song.tracks[0]?.id ?? null)
-  useUiStore.getState().showNotice(message, 'info', { label: 'Undo', run: () => useSongStore.getState().undo() })
+  const ui = useUiStore.getState()
+  ui.selectTrack(song.tracks[0]?.id ?? null)
+  const first = song.arrangement[0]
+  if (first) ui.selectEntry(first.id, first.sectionId, 0)
+  ui.showNotice(message, 'info', { label: 'Undo', run: () => useSongStore.getState().undo() })
 }
 
 export function newSong(kind: 'blank' | 'demo'): void {
@@ -26,14 +39,7 @@ export function newSong(kind: 'blank' | 'demo'): void {
 export function saveSongToFile(): void {
   const song = useSongStore.getState().song
   const fileName = songFileName(song.name)
-  const url = URL.createObjectURL(new Blob([serializeSong(song)], { type: 'application/json' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = fileName
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  downloadBlob(new Blob([serializeSong(song)], { type: 'application/json' }), fileName)
   useUiStore.getState().showNotice(`Saved ${fileName}`)
 }
 
@@ -63,4 +69,49 @@ export function pickSongFile(): void {
     if (file) void openSongFromFile(file)
   }
   input.click()
+}
+
+function formatDuration(seconds: number): string {
+  const s = Math.round(seconds)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+/** Renders the whole song to a WAV file and downloads it. */
+export async function exportAudio(): Promise<void> {
+  const ui = useUiStore.getState()
+  if (ui.exporting) return
+  if (isPlaying()) stop()
+  const song = useSongStore.getState().song
+  ui.setExporting('wav')
+  try {
+    const [{ renderSong }, { encodeWav }] = await Promise.all([import('../export/render'), import('../export/wav')])
+    const audio = await renderSong(song)
+    const fileName = `${songSlug(song.name)}.wav`
+    downloadBlob(new Blob([encodeWav(audio.channels, audio.sampleRate)], { type: 'audio/wav' }), fileName)
+    useUiStore.getState().showNotice(`Exported ${fileName} (${formatDuration(audio.duration)})`)
+  } catch (err) {
+    console.error(err)
+    useUiStore.getState().showNotice("The audio export didn't work. Please try again.", 'error')
+  } finally {
+    useUiStore.getState().setExporting(null)
+  }
+}
+
+/** Downloads the whole song as a Standard MIDI File. */
+export async function exportMidi(): Promise<void> {
+  const ui = useUiStore.getState()
+  if (ui.exporting) return
+  const song = useSongStore.getState().song
+  ui.setExporting('midi')
+  try {
+    const { songToMidi } = await import('../export/midi')
+    const fileName = `${songSlug(song.name)}.mid`
+    downloadBlob(new Blob([songToMidi(song) as Uint8Array<ArrayBuffer>], { type: 'audio/midi' }), fileName)
+    useUiStore.getState().showNotice(`Exported ${fileName}`)
+  } catch (err) {
+    console.error(err)
+    useUiStore.getState().showNotice("The MIDI export didn't work. Please try again.", 'error')
+  } finally {
+    useUiStore.getState().setExporting(null)
+  }
 }

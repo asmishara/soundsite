@@ -1,8 +1,9 @@
 import { useRef, useState, type MouseEvent, type PointerEvent, type RefObject } from 'react'
 import { engine } from '../../audio/engine'
+import { findSection, partNotes, sectionSteps } from '../../model/arrangement'
 import { moveByScaleSteps, scaleStepsBetween, snapToScale } from '../../model/music'
-import { MAX_PITCH, MIN_PITCH, type InstrumentTrack, type Note } from '../../model/types'
-import { totalSteps, useSongStore, type NotePatch } from '../../state/songStore'
+import { MAX_PITCH, MIN_PITCH, type InstrumentTrack, type Note, type Section } from '../../model/types'
+import { useSongStore, type NotePatch, type PartRef } from '../../state/songStore'
 import { useUiStore } from '../../state/uiStore'
 import { ROW_HEIGHT, pitchToY, yToPitch } from './layout'
 import { pitchesToPlace } from './placement'
@@ -27,9 +28,15 @@ export type Marquee = { left: number; top: number; width: number; height: number
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 /** All mouse interaction on the note grid: draw, move, resize, delete and box-select. */
-export function usePianoRollPointer(gridRef: RefObject<HTMLDivElement | null>, track: InstrumentTrack, zoom: number) {
+export function usePianoRollPointer(
+  gridRef: RefObject<HTMLDivElement | null>,
+  track: InstrumentTrack,
+  section: Section,
+  zoom: number,
+) {
   const drag = useRef<Drag | null>(null)
   const [marquee, setMarquee] = useState<Marquee | null>(null)
+  const part: PartRef = { trackId: track.id, sectionId: section.id }
 
   const local = (e: { clientX: number; clientY: number }): Point => {
     const rect = gridRef.current!.getBoundingClientRect()
@@ -38,16 +45,22 @@ export function usePianoRollPointer(gridRef: RefObject<HTMLDivElement | null>, t
 
   const noteIdAt = (target: EventTarget) => (target as HTMLElement).closest<HTMLElement>('[data-note-id]')?.dataset.noteId
 
+  /** Live notes from the store, so rapid input never acts on a stale render. */
   const currentNotes = () => {
     const t = useSongStore.getState().song.tracks.find((t) => t.id === track.id)
-    return t?.kind === 'instrument' ? t.notes : []
+    return t?.kind === 'instrument' ? partNotes(t, section.id) : []
+  }
+
+  const currentSteps = () => {
+    const live = findSection(useSongStore.getState().song, section.id)
+    return live ? sectionSteps(live) : sectionSteps(section)
   }
 
   const startMove = (start: Point, anchorId: string, ids: string[]) => {
     const notes = currentNotes().filter((n) => ids.includes(n.id))
     const anchor = notes.find((n) => n.id === anchorId)
     if (!anchor) return
-    const total = totalSteps(useSongStore.getState().song)
+    const total = currentSteps()
     drag.current = {
       mode: 'move',
       start,
@@ -66,7 +79,7 @@ export function usePianoRollPointer(gridRef: RefObject<HTMLDivElement | null>, t
   const deleteAt = (id: string) => {
     const { selectedNoteIds, setSelection } = useUiStore.getState()
     const ids = selectedNoteIds.includes(id) ? selectedNoteIds : [id]
-    useSongStore.getState().deleteNotes(track.id, ids)
+    useSongStore.getState().deleteNotes(part, ids)
     setSelection(selectedNoteIds.filter((x) => !ids.includes(x)))
   }
 
@@ -113,7 +126,7 @@ export function usePianoRollPointer(gridRef: RefObject<HTMLDivElement | null>, t
       if (pitches.length === 0) return
       store.beginTransaction()
       const ids = store.addNotes(
-        track.id,
+        part,
         pitches.map((pitch) => ({ pitch, start: step, length: ui.noteLength, velocity: 0.8 })),
       )
       ui.setSelection(ids)
@@ -153,7 +166,7 @@ export function usePianoRollPointer(gridRef: RefObject<HTMLDivElement | null>, t
 
       const patches: Record<string, NotePatch> = {}
       for (const [id, o] of d.origin) patches[id] = { start: o.start + dStart, pitch: movePitch(o.pitch) }
-      store.updateNotes(track.id, patches)
+      store.updateNotes(part, patches)
 
       const anchorPitch = patches[d.anchorId].pitch!
       if (anchorPitch !== d.lastPitch) {
@@ -166,7 +179,7 @@ export function usePianoRollPointer(gridRef: RefObject<HTMLDivElement | null>, t
       for (const [id, length] of d.origin) {
         patches[id] = { length: Math.max(Math.min(snap, length), length + dLength) }
       }
-      store.updateNotes(track.id, patches)
+      store.updateNotes(part, patches)
     } else {
       const box = {
         left: Math.min(d.start.x, p.x),

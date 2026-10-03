@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
 import { togglePlay } from '../audio/scheduler'
+import { findSection, partNotes, sectionSteps } from '../model/arrangement'
 import { moveByScaleSteps } from '../model/music'
 import { MAX_PITCH, MIN_PITCH, type InstrumentTrack } from '../model/types'
 import { pickSongFile, saveSongToFile } from '../state/songFiles'
-import { getTrack, totalSteps, useSongStore } from '../state/songStore'
+import { getTrack, useSongStore } from '../state/songStore'
 import { useUiStore } from '../state/uiStore'
 
 function isTyping(target: EventTarget | null): boolean {
@@ -32,7 +33,10 @@ export function useKeyboardShortcuts() {
       const songStore = useSongStore.getState()
       const ui = useUiStore.getState()
       const track = getTrack(songStore.song, ui.selectedTrackId)
-      const instrument = track?.kind === 'instrument' ? (track as InstrumentTrack) : null
+      const section = findSection(songStore.song, ui.selectedSectionId)
+      const instrument = track?.kind === 'instrument' && section ? (track as InstrumentTrack) : null
+      const part = instrument && section ? { trackId: instrument.id, sectionId: section.id } : null
+      const partNoteList = instrument && section ? partNotes(instrument, section.id) : []
       const selected = ui.selectedNoteIds
       const k = e.key.toLowerCase()
 
@@ -63,25 +67,25 @@ export function useKeyboardShortcuts() {
           return true
         }
 
-        if (!instrument) return false
+        if (!part || !section) return false
 
         if (mod && k === 'a') {
-          ui.setSelection(instrument.notes.map((n) => n.id))
+          ui.setSelection(partNoteList.map((n) => n.id))
           return true
         }
         if (selected.length === 0) return false
 
         if (e.key === 'Delete' || e.key === 'Backspace') {
-          songStore.deleteNotes(instrument.id, selected)
+          songStore.deleteNotes(part, selected)
           ui.setSelection([])
           return true
         }
         if (mod && k === 'd') {
-          ui.setSelection(songStore.duplicateNotes(instrument.id, selected))
+          ui.setSelection(songStore.duplicateNotes(part, selected))
           return true
         }
 
-        const notes = instrument.notes.filter((n) => selected.includes(n.id))
+        const notes = partNoteList.filter((n) => selected.includes(n.id))
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
           const dir = e.key === 'ArrowUp' ? 1 : -1
           const key = songStore.song.key
@@ -89,15 +93,15 @@ export function useKeyboardShortcuts() {
             e.shiftKey ? p + 12 * dir : ui.snapToScale ? moveByScaleSteps(p, dir, key) : p + dir
           // Move the group only if every note stays in range, so chords keep their shape.
           if (notes.every((n) => transpose(n.pitch) >= MIN_PITCH && transpose(n.pitch) <= MAX_PITCH)) {
-            songStore.transformNotes(instrument.id, selected, (n) => ({ pitch: transpose(n.pitch) }))
+            songStore.transformNotes(part, selected, (n) => ({ pitch: transpose(n.pitch) }))
           }
           return true
         }
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           const delta = (e.key === 'ArrowRight' ? 1 : -1) * ui.snap
-          const total = totalSteps(songStore.song)
+          const total = sectionSteps(section)
           if (notes.every((n) => n.start + delta >= 0 && n.start + n.length + delta <= total)) {
-            songStore.transformNotes(instrument.id, selected, (n) => ({ start: n.start + delta }))
+            songStore.transformNotes(part, selected, (n) => ({ start: n.start + delta }))
           }
           return true
         }

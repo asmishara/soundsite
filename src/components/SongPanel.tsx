@@ -2,9 +2,18 @@ import { useRef, useState } from 'react'
 import { useDismiss } from '../hooks/useDismiss'
 import { MAX_NAME_LENGTH } from '../model/rules'
 import { useSaveStatus } from '../state/persistence'
-import { newSong, pickSongFile, saveSongToFile } from '../state/songFiles'
+import { exportAudio, exportMidi, newSong, pickSongFile, saveSongToFile } from '../state/songFiles'
 import { useSongStore } from '../state/songStore'
-import { AlertIcon, CheckIcon, DownloadIcon, FilePlusIcon, FolderOpenIcon } from './common/icons'
+import { useUiStore } from '../state/uiStore'
+import {
+  AlertIcon,
+  CheckIcon,
+  DownloadIcon,
+  FilePlusIcon,
+  FolderOpenIcon,
+  MusicFileIcon,
+  WaveIcon,
+} from './common/icons'
 import styles from './SongPanel.module.css'
 
 function SongName() {
@@ -85,6 +94,31 @@ function SaveStatus() {
   )
 }
 
+function ExportButtons() {
+  const exporting = useUiStore((s) => s.exporting)
+  return (
+    <div className={styles.actions} aria-busy={exporting !== null}>
+      <button
+        className="btn"
+        onClick={() => void exportAudio()}
+        disabled={exporting !== null}
+        title="Render the whole song to a WAV audio file"
+      >
+        {exporting === 'wav' ? <span className={styles.spinner} aria-hidden="true" /> : <WaveIcon size={14} />}
+        {exporting === 'wav' ? 'Rendering…' : 'Export WAV'}
+      </button>
+      <button
+        className="btn"
+        onClick={() => void exportMidi()}
+        disabled={exporting !== null}
+        title="Export the whole song as a MIDI file for other music apps"
+      >
+        <MusicFileIcon size={14} /> {exporting === 'midi' ? 'Exporting…' : 'Export MIDI'}
+      </button>
+    </div>
+  )
+}
+
 export function SongPanel() {
   return (
     <section className={styles.panel} aria-label="Song">
@@ -99,6 +133,7 @@ export function SongPanel() {
           <DownloadIcon size={14} /> Save
         </button>
       </div>
+      <ExportButtons />
       <SaveStatus />
     </section>
   )

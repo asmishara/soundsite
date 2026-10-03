@@ -1,4 +1,5 @@
 import { togglePlay } from '../audio/scheduler'
+import { findSection } from '../model/arrangement'
 import { SCALES, SCALE_IDS, pitchClassName } from '../model/music'
 import { MAX_BARS, MAX_BPM, MIN_BARS, MIN_BPM, STEPS_PER_BAR, STEPS_PER_BEAT, type ScaleId } from '../model/types'
 import { usePlayheadStore } from '../state/playheadStore'
@@ -16,8 +17,9 @@ const ROOT_LABELS = Array.from({ length: 12 }, (_, pc) => {
   return sharp === flat ? sharp : `${sharp}/${flat}`
 })
 
+/** Bar.beat.sixteenth: from the start of the song in song mode, otherwise within the looping section. */
 function Position() {
-  const step = usePlayheadStore((s) => s.step)
+  const step = usePlayheadStore((s) => (s.songStep >= 0 ? s.songStep : s.step))
   const s = Math.max(step, 0)
   const bar = Math.floor(s / STEPS_PER_BAR) + 1
   const beat = Math.floor((s % STEPS_PER_BAR) / STEPS_PER_BEAT) + 1
@@ -33,13 +35,14 @@ export function TransportBar() {
   const isPlaying = usePlayheadStore((s) => s.isPlaying)
   const bpm = useSongStore((s) => s.song.bpm)
   const swing = useSongStore((s) => s.song.swing)
-  const bars = useSongStore((s) => s.song.bars)
+  const selectedSectionId = useUiStore((s) => s.selectedSectionId)
+  const section = useSongStore((s) => findSection(s.song, selectedSectionId))
   const key = useSongStore((s) => s.song.key)
   const masterVolume = useSongStore((s) => s.song.masterVolume)
   const canUndo = useSongStore((s) => s.past.length > 0)
   const canRedo = useSongStore((s) => s.future.length > 0)
   const audioReady = useUiStore((s) => s.audioReady)
-  const { setBpm, setSwing, setBars, setKey, setMasterVolume, undo, redo } = useSongStore.getState()
+  const { setBpm, setSwing, setSectionBars, setKey, setMasterVolume, undo, redo } = useSongStore.getState()
 
   return (
     <header className={styles.bar}>
@@ -83,9 +86,16 @@ export function TransportBar() {
           />
           <span className={styles.value}>{Math.round((swing / 0.6) * 100)}%</span>
         </label>
-        <label className={styles.field}>
+        <label className={styles.field} title="Length of the selected section, in bars">
           <span className="label">Bars</span>
-          <NumberField value={bars} min={MIN_BARS} max={MAX_BARS} onCommit={setBars} label="Song length in bars" width={44} />
+          <NumberField
+            value={section?.bars ?? 4}
+            min={MIN_BARS}
+            max={MAX_BARS}
+            onCommit={(n) => section && setSectionBars(section.id, n)}
+            label={`Length of ${section?.name ?? 'the section'} in bars`}
+            width={44}
+          />
         </label>
       </div>
 

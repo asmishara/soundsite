@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { INSTRUMENT_PRESETS, INSTRUMENT_PRESET_IDS } from '../model/presets'
 import type { Track } from '../model/types'
 import { useDismiss } from '../hooks/useDismiss'
+import { partNotes } from '../model/arrangement'
 import { useSongStore } from '../state/songStore'
 import { useUiStore } from '../state/uiStore'
 import { ChevronDownIcon, ChevronUpIcon, DrumIcon, KeysIcon, PlusIcon, TrashIcon } from './common/icons'
@@ -42,13 +43,16 @@ function ColorSwatch({ color, label, onCommit }: { color: string; label: string;
 
 function TrackRow({ track, index, count }: { track: Track; index: number; count: number }) {
   const selected = useUiStore((s) => s.selectedTrackId === track.id)
+  const sectionId = useUiStore((s) => s.selectedSectionId)
   const [editing, setEditing] = useState(false)
   const { setMixer, updateTrack, removeTrack, moveTrack } = useSongStore.getState()
 
+  // Note counts are for the section being edited.
+  const noteCount = track.kind === 'instrument' && sectionId ? partNotes(track, sectionId).length : 0
   const subtitle =
     track.kind === 'drums'
       ? 'Drum kit'
-      : `${INSTRUMENT_PRESETS[track.preset].label} · ${track.notes.length} note${track.notes.length === 1 ? '' : 's'}`
+      : `${INSTRUMENT_PRESETS[track.preset].label} · ${noteCount} note${noteCount === 1 ? '' : 's'}`
 
   return (
     <li

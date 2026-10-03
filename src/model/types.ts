@@ -62,16 +62,20 @@ type TrackBase = {
   mixer: Mixer
 }
 
+/** Velocity per step for each drum voice; 0 = off. */
+export type DrumPattern = Record<DrumVoiceId, number[]>
+
 export type InstrumentTrack = TrackBase & {
   kind: 'instrument'
   preset: InstrumentPresetId
-  notes: Note[]
+  /** The track's notes in each section, keyed by section id. Every section has an entry. */
+  notes: Record<string, Note[]>
 }
 
 export type DrumTrack = TrackBase & {
   kind: 'drums'
-  /** Velocity per step for each voice; 0 = off. Arrays are always `bars * STEPS_PER_BAR` long. */
-  steps: Record<DrumVoiceId, number[]>
+  /** The track's pattern in each section, keyed by section id. Arrays are `section.bars * STEPS_PER_BAR` long. */
+  steps: Record<string, DrumPattern>
 }
 
 export type Track = InstrumentTrack | DrumTrack
@@ -88,14 +92,31 @@ export type FxSettings = {
   delayFeedback: number
 }
 
+/** A part of the song (e.g. Intro, Verse, Chorus) with its own notes and patterns on every track. */
+export type Section = {
+  id: string
+  name: string
+  /** 1–16 */
+  bars: number
+  color: string
+}
+
+/** One slot in the song order. Several entries may play the same section (linked repeats). */
+export type ArrangementEntry = {
+  id: string
+  sectionId: string
+}
+
 export type Song = {
   name: string
   bpm: number
   /** 0–1 */
   swing: number
-  /** 1–16 */
-  bars: number
   key: Key
+  /** Every section is referenced by at least one arrangement entry. */
+  sections: Section[]
+  /** The order sections play in. Never empty. */
+  arrangement: ArrangementEntry[]
   tracks: Track[]
   /** dB */
   masterVolume: number

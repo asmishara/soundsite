@@ -8,8 +8,18 @@ export type InstrumentVoice = {
   dispose: () => void
 }
 
+/**
+ * Offline (export) renders: Tone's voice garbage collector drops idle voices from the pool but, in an
+ * offline context, never disposes them, so their always-running nodes pile up and fresh voices keep
+ * being created. Turning it off keeps one reusable pool, which makes long exports much faster.
+ */
+function keepVoicesOffline(synth: Tone.PolySynth): void {
+  if (synth.context.isOffline) synth.context.clearInterval((synth as unknown as { _gcTimeout: number })._gcTimeout)
+}
+
 /** Wraps a PolySynth and an optional effect chain behind a common interface. */
 function voice<S extends Tone.PolySynth>(synth: S, chain: Tone.ToneAudioNode[] = []): InstrumentVoice {
+  keepVoicesOffline(synth)
   if (chain.length > 0) synth.chain(...chain)
   return {
     output: chain.length > 0 ? chain[chain.length - 1] : synth,
