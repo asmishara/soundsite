@@ -6,6 +6,10 @@ export type ChordMode = 'off' | 'diatonic3' | 'diatonic4' | ChordQuality
 /** Loop the selected section, or play the whole arrangement. */
 export type PlayMode = 'section' | 'song'
 export type ExportKind = 'wav' | 'midi'
+/** A range of steps to loop: bars of one section, or a stretch of the whole song. `end` is exclusive. */
+export type LoopRange =
+  | { scope: 'section'; sectionId: string; start: number; end: number }
+  | { scope: 'song'; start: number; end: number }
 
 /** Grid options in 16th-note steps. */
 export const SNAP_OPTIONS = [
@@ -35,6 +39,7 @@ type UiState = {
   /** Where playback starts, in steps from the start of the selected section */
   startStep: number
   playMode: PlayMode
+  loop: LoopRange | null
   /** Export in progress, if any */
   exporting: ExportKind | null
   tool: Tool
@@ -60,6 +65,7 @@ type UiState = {
   selectEntry: (entryId: string, sectionId: string, startStep?: number) => void
   setStartStep: (step: number) => void
   setPlayMode: (mode: PlayMode) => void
+  setLoop: (loop: LoopRange | null) => void
   setExporting: (kind: ExportKind | null) => void
   setTool: (tool: Tool) => void
   setSnap: (steps: number) => void
@@ -84,6 +90,7 @@ export const useUiStore = create<UiState>()((set) => ({
   selectedEntryId: null,
   startStep: 0,
   playMode: 'section',
+  loop: null,
   exporting: null,
   tool: 'draw',
   snap: 1,
@@ -106,13 +113,15 @@ export const useUiStore = create<UiState>()((set) => ({
       return {
         selectedEntryId: entryId,
         selectedSectionId: sectionId,
-        // Note selection and the start marker belong to the section being edited.
+        // Note selection, the start marker and a section loop belong to the section being edited.
         selectedNoteIds: sectionChanged ? [] : s.selectedNoteIds,
         startStep: startStep ?? (sectionChanged ? 0 : s.startStep),
+        loop: sectionChanged && s.loop?.scope === 'section' ? null : s.loop,
       }
     }),
   setStartStep: (startStep) => set({ startStep: Math.max(0, startStep) }),
   setPlayMode: (playMode) => set({ playMode }),
+  setLoop: (loop) => set({ loop }),
   setExporting: (exporting) => set({ exporting }),
   setTool: (tool) => set({ tool }),
   setSnap: (snap) => set({ snap }),

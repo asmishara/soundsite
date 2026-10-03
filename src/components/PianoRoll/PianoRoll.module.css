@@ -65,6 +65,30 @@
   background-color: rgba(255, 255, 255, 0.03);
 }
 
+.loopBand {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(139, 157, 255, 0.24);
+  border-left: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
+  pointer-events: none;
+}
+
+.loopPreview {
+  background: rgba(139, 157, 255, 0.14);
+  border-style: dashed;
+}
+
+.loopShade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(10, 12, 16, 0.5);
+  pointer-events: none;
+  z-index: 3;
+}
+
 .startFlag {
   position: absolute;
   bottom: 0;

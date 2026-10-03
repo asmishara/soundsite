@@ -9,7 +9,7 @@ import { usePlayheadStore } from '../../state/playheadStore'
 import { useSongStore, type PartRef } from '../../state/songStore'
 import { useUiStore } from '../../state/uiStore'
 import { Playhead } from '../PianoRoll/Playhead'
-import { Ruler } from '../PianoRoll/Ruler'
+import { LoopShade, Ruler } from '../PianoRoll/Ruler'
 import styles from './StepSequencer.module.css'
 
 const LABEL_WIDTH = 104
@@ -94,7 +94,7 @@ export function StepSequencer({ track, section }: { track: DrumTrack; section: S
           <div className={styles.header} style={{ height: HEADER_HEIGHT }}>
             <div className={styles.corner} style={{ width: LABEL_WIDTH }} />
             <div className={styles.ruler} style={{ width: total * cellWidth }}>
-              <Ruler bars={bars} zoom={cellWidth} />
+              <Ruler bars={bars} zoom={cellWidth} sectionId={section.id} />
               <Playhead zoom={cellWidth} sectionId={section.id} variant="marker" />
             </div>
           </div>
@@ -144,6 +144,7 @@ export function StepSequencer({ track, section }: { track: DrumTrack; section: S
                   )
                 }),
               )}
+              <LoopShade sectionId={section.id} zoom={cellWidth} steps={total} />
               <PlayheadColumn cellWidth={cellWidth} sectionId={section.id} />
             </div>
           </div>

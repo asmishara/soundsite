@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState, type PointerEvent } from 'react'
-import { cue, setPlayMode } from '../../audio/scheduler'
+import { cue, setLoop, setPlayMode } from '../../audio/scheduler'
 import { useDismiss } from '../../hooks/useDismiss'
 import {
   layoutArrangement,
+  locate,
   placementOf,
   secondsPerStep,
   sectionSteps,
@@ -50,6 +51,81 @@ function StartMarker({ layout }: { layout: ArrangementLayout }) {
   if (!placement) return null
   const x = (placement.start + Math.min(startStep, sectionSteps(placement.section) - 1)) * PX_PER_STEP
   return <div className={styles.startMarker} style={{ left: x }} title="Playback starts here" />
+}
+
+/** The song loop on the timeline, if one is set. */
+function SongLoopBand() {
+  const loop = useUiStore((s) => s.loop)
+  if (loop?.scope !== 'song') return null
+  return (
+    <div className={styles.loopBand} style={{ left: loop.start * PX_PER_STEP, width: (loop.end - loop.start) * PX_PER_STEP }} />
+  )
+}
+
+/** The bar lane above the blocks: click to play from a bar of the song, drag to loop a stretch of it. */
+function Timeline({ layout }: { layout: ArrangementLayout }) {
+  const drag = useRef<{ from: number; startX: number; moved: boolean } | null>(null)
+  const [preview, setPreview] = useState<{ from: number; to: number } | null>(null)
+  const totalBars = layout.totalSteps / STEPS_PER_BAR
+
+  const barAt = (e: PointerEvent<HTMLDivElement>) => {
+    const x = e.clientX - e.currentTarget.getBoundingClientRect().left
+    return Math.min(totalBars - 1, Math.max(0, Math.floor(x / PX_PER_BAR)))
+  }
+
+  const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    const d = drag.current
+    drag.current = null
+    setPreview(null)
+    if (!d) return
+    if (d.moved) {
+      const to = barAt(e)
+      const first = Math.min(d.from, to)
+      const last = Math.max(d.from, to)
+      setLoop({ scope: 'song', start: first * STEPS_PER_BAR, end: (last + 1) * STEPS_PER_BAR })
+      return
+    }
+    // A click selects the block under the pointer and plays from that bar.
+    const found = locate(layout, d.from * STEPS_PER_BAR)
+    if (!found) return
+    useUiStore.getState().selectEntry(found.placement.entry.id, found.placement.section.id, found.localStep)
+    cue(found.localStep)
+  }
+
+  return (
+    <div
+      className={styles.timeline}
+      style={{ ['--bar' as string]: `${PX_PER_BAR}px` }}
+      title="Click to play from a bar, or drag to loop part of the song"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return
+        e.currentTarget.setPointerCapture(e.pointerId)
+        drag.current = { from: barAt(e), startX: e.clientX, moved: false }
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current
+        if (!d || (!d.moved && Math.abs(e.clientX - d.startX) < 4)) return
+        d.moved = true
+        setPreview({ from: d.from, to: barAt(e) })
+      }}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => {
+        drag.current = null
+        setPreview(null)
+      }}
+    >
+      <SongLoopBand />
+      {preview && (
+        <div
+          className={`${styles.loopBand} ${styles.loopPreview}`}
+          style={{
+            left: Math.min(preview.from, preview.to) * PX_PER_BAR,
+            width: (Math.abs(preview.to - preview.from) + 1) * PX_PER_BAR,
+          }}
+        />
+      )}
+    </div>
+  )
 }
 
 function RenameInput({ initial, onDone }: { initial: string; onDone: (name: string | null) => void }) {
@@ -329,6 +405,7 @@ export function ArrangementStrip() {
               }}
             />
           )}
+          <Timeline layout={layout} />
           <StartMarker layout={layout} />
           <StripPlayhead layout={layout} />
         </div>

@@ -22,8 +22,13 @@ A browser-based music composer: sketch melodies, chords and beats, then mix them
   - **+ Section** adds an empty section at the end.
 - **Playback:**
   - **Loop section** repeats the section you're editing; **Play song** plays the whole arrangement and loops back to the top.
-  - Click a bar in the editor's ruler, or anywhere in a block, to play from there. A yellow flag marks the start, and clicking while playing jumps straight there.
+  - Click a bar in the editor's ruler, or in the timeline above the blocks, to play from there. A yellow flag marks the start, and clicking while playing jumps straight there.
+  - **Loop a range:** drag across bars in the editor's ruler to loop just those bars, or across the timeline to loop part of the song (even across sections). The loop shows as a band, everything outside it is dimmed, and a chip in the transport bar shows the range with an × to clear it.
   - Tempo (40–240 BPM) and swing, with live editing while the song plays.
+- **Composing help:** the **Compose** button in the piano roll toolbar offers:
+  - **Chord progression:** eleven common progressions (Pop, Ballad, Canon, Jazz ii–V–I, 12-bar blues, Epic, Andalusian…), each shown with the chords it gives in your key. Choose how long each chord lasts, a rhythm (held, half notes, stabs, off-beat, or arpeggiated) and a register, and optionally write a bass line on another track. Chords are voiced so each one moves as little as possible from the last.
+  - **Arpeggiate:** turns selected chords (or all of them) into arpeggios: up, down, up & down or random, in 1/8 or 1/16 notes, over one or two octaves.
+- **Drum patterns:** the **Patterns** button in the drum toolbar fills the section with one of nine styles (House, Rock, Hip-hop, Trap, Breakbeat, Reggaeton, Half-time, Disco, Bossa nova), optionally with a crash and an end fill. The menu stays open so you can compare styles while the song plays.
 - **Mixer and effects:**
   - Per-track volume, pan, mute/solo, and reverb and delay sends.
   - A shared reverb (decay and level) and a tempo-synced delay (time and feedback).
@@ -63,6 +68,8 @@ Then open the URL Vite prints. Browsers only allow audio after a user gesture, s
 | `npm test` | Run the unit tests (Vitest) |
 | `npm run lint` | Lint with oxlint |
 
+GitHub Actions runs lint, the unit tests and the build on every pull request and on pushes to `master` (see `.github/workflows/ci.yml`).
+
 ## Keyboard shortcuts
 
 | Keys | Action |
@@ -86,21 +93,24 @@ React 19 + TypeScript + Vite, with Zustand and Immer for state and Tone.js for a
 src/
   model/       Pure data and music theory: song types, scales, chords, presets, demo song,
                arrangement.ts (section layout, song events, swing), serialize.ts (file format,
-               validation and upgrades)
+               validation and upgrades), compose/ (progressions and voice leading, arpeggiator,
+               drum styles)
   state/       Zustand stores
                songStore: the song, every edit action, undo/redo with transactions
                uiStore: tool, snap, selection, chord mode, zoom
                playheadStore: the high-frequency playback position
+               composeStore: remembered choices in the composing tools
                persistence: autosave to localStorage
-               songFiles: save/open song files, new song
+               songFiles: save/open song files, new song, exports
   audio/       graph.ts       every Tone.js node for a song (tracks, sends, master), in any context
                engine.ts      the live graph, kept in sync with the song store
                scheduler.ts   16th-note loop for section and song playback; reads the song live
+               loop.ts        loop-range wrapping rules
                instruments.ts synth presets
                drums.ts       synthesized drum kit
   export/      render.ts (offline WAV render), wav.ts (WAV encoder), midi.ts (MIDI writer)
-  components/  TransportBar, Arrangement/, TrackList, SongPanel, EditorToolbar, PianoRoll/,
-               StepSequencer/, Mixer/, common/
+  components/  TransportBar, Arrangement/, TrackList, SongPanel, EditorToolbar, Compose/,
+               PianoRoll/, StepSequencer/, Mixer/, common/
   hooks/       Keyboard shortcuts, playhead following
 ```
 

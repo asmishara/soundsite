@@ -9,7 +9,7 @@ import { GridBackground } from './GridBackground'
 import { GhostNote, NoteBlock } from './NoteBlock'
 import { PianoKeys } from './PianoKeys'
 import { Playhead } from './Playhead'
-import { Ruler } from './Ruler'
+import { LoopShade, Ruler } from './Ruler'
 import { KEYS_WIDTH, ROW_COUNT, ROW_HEIGHT, RULER_HEIGHT, pitchToY } from './layout'
 import { usePianoRollPointer } from './usePianoRollPointer'
 import styles from './PianoRoll.module.css'
@@ -57,7 +57,7 @@ export function PianoRoll({ track, section }: { track: InstrumentTrack; section:
           <div className={styles.header} style={{ height: RULER_HEIGHT }}>
             <div className={styles.corner} style={{ width: KEYS_WIDTH }} />
             <div className={styles.ruler} style={{ width }}>
-              <Ruler bars={section.bars} zoom={zoom} />
+              <Ruler bars={section.bars} zoom={zoom} sectionId={section.id} />
               <Playhead zoom={zoom} sectionId={section.id} variant="marker" />
             </div>
           </div>
@@ -83,6 +83,7 @@ export function PianoRoll({ track, section }: { track: InstrumentTrack; section:
                   preferFlats={preferFlats}
                 />
               ))}
+              <LoopShade sectionId={section.id} zoom={zoom} steps={section.bars * STEPS_PER_BAR} />
               <Playhead zoom={zoom} sectionId={section.id} />
               {marquee && <div className={styles.marquee} style={marquee} />}
             </div>

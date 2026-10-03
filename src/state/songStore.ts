@@ -79,7 +79,11 @@ type SongState = {
   deleteNotes: (part: PartRef, ids: string[]) => void
   duplicateNotes: (part: PartRef, ids: string[]) => string[]
 
+  /** Removes `removeIds` from a part (all of its notes if null) and adds `add`, as one edit. */
+  replaceNotes: (part: PartRef, removeIds: string[] | null, add: NoteInput[]) => string[]
+
   setDrumStep: (part: PartRef, voice: DrumVoiceId, step: number, velocity: number) => void
+  setDrumPattern: (part: PartRef, pattern: DrumPattern) => void
 }
 
 /** The notes of an instrument part inside a draft, created if missing. */
@@ -426,6 +430,35 @@ export const useSongStore = create<SongState>()((set, get) => {
         .map(({ pitch, start, length, velocity }) => ({ pitch, start: start + offset, length, velocity }))
       return get().addNotes(part, copies)
     },
+
+    replaceNotes: (part, removeIds, add) => {
+      const created: Note[] = add.map((n) => ({ ...n, id: n.id ?? newId('note') }))
+      edit((s) => {
+        const target = draftNotes(s, part)
+        if (!target) return
+        const doomed = removeIds ? new Set(removeIds) : null
+        const kept = doomed ? target.notes.filter((n) => !doomed.has(n.id)) : []
+        for (const note of created) sanitizeNote(note, target.section.bars)
+        const track = s.tracks.find((t) => t.id === part.trackId)
+        if (track?.kind === 'instrument') track.notes[part.sectionId] = [...kept, ...created]
+      })
+      return created.map((n) => n.id)
+    },
+
+    setDrumPattern: (part, pattern) =>
+      edit((s) => {
+        const track = s.tracks.find((t) => t.id === part.trackId)
+        const section = s.sections.find((x) => x.id === part.sectionId)
+        if (track?.kind !== 'drums' || !section) return
+        const total = section.bars * STEPS_PER_BAR
+        // Fit the pattern to the section, padding or trimming each voice.
+        track.steps[section.id] = Object.fromEntries(
+          Object.entries(pattern).map(([voice, steps]) => [
+            voice,
+            Array.from({ length: total }, (_, i) => clamp(steps[i] ?? 0, 0, 1)),
+          ]),
+        ) as DrumPattern
+      }),
 
     setDrumStep: (part, voice, step, velocity) =>
       edit((s) => {
