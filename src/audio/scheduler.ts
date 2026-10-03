@@ -15,8 +15,9 @@ import { DRUM_VOICE_IDS } from '../model/presets'
 import type { Note, Section, Song } from '../model/types'
 import { STOPPED, usePlayheadStore } from '../state/playheadStore'
 import { useSongStore } from '../state/songStore'
-import { useUiStore, type PlayMode } from '../state/uiStore'
+import { useUiStore, type LoopRange, type PlayMode } from '../state/uiStore'
 import { engine } from './engine'
+import { loopBounds, startWithin, wrapPosition, type LoopBounds } from './loop'
 
 let repeatId: number | null = null
 /** Bumped on play/stop so playhead updates queued by a previous run are ignored. */
@@ -56,6 +57,16 @@ function selectedPlacement(song: Song): Placement | undefined {
   return placementOf(layout, ui.selectedEntryId) ?? layout.placements.find((p) => p.section.id === ui.selectedSectionId)
 }
 
+/** The loop that applies to the current mode (a section loop only while that section is looping), if any. */
+function activeLoop(song: Song, section: Section): LoopBounds | null {
+  const loop = useUiStore.getState().loop
+  if (!loop) return null
+  if (mode === 'section') {
+    return loop.scope === 'section' && loop.sectionId === section.id ? loopBounds(loop, sectionSteps(section)) : null
+  }
+  return loop.scope === 'song' ? loopBounds(loop, layoutArrangement(song).totalSteps) : null
+}
+
 /** Plays every note and drum hit that starts on `local` in `section`. */
 function triggerStep(song: Song, section: Section, local: number, time: number): void {
   const stepSeconds = secondsPerStep(song.bpm)
@@ -88,7 +99,8 @@ function tick(time: number): void {
 
   if (mode === 'song') {
     const layout = layoutArrangement(song)
-    if (position >= layout.totalSteps) position = 0 // loop back to the top of the song
+    // At the end of the song (or of a song loop) go back to the top (or the loop start).
+    position = wrapPosition(position, layout.totalSteps, activeLoop(song, selectedSection(song)))
     const found = locate(layout, position)
     if (!found) return
     section = found.placement.section
@@ -98,10 +110,10 @@ function tick(time: number): void {
     position++
   } else {
     section = selectedSection(song)
-    const steps = sectionSteps(section)
-    local = position % steps
+    position = wrapPosition(position, sectionSteps(section), activeLoop(song, section))
+    local = position
     entryId = useUiStore.getState().selectedEntryId
-    position = (local + 1) % steps
+    position++
   }
 
   triggerStep(song, section, local, time)
@@ -118,14 +130,17 @@ function tick(time: number): void {
   )
 }
 
-/** Where playback should begin: the start marker within the selected section, placed in the song if needed. */
+/**
+ * Where playback should begin: the start marker within the selected section (placed in the song in
+ * song mode), or the loop start if the marker is outside an active loop.
+ */
 function startPosition(): number {
   const song = useSongStore.getState().song
   const section = selectedSection(song)
   const local = Math.min(useUiStore.getState().startStep, sectionSteps(section) - 1)
-  if (mode === 'section') return local
   const placement = selectedPlacement(song)
-  return placement ? placement.start + local : 0
+  const marker = mode === 'section' ? local : placement ? placement.start + local : 0
+  return startWithin(marker, activeLoop(song, section))
 }
 
 export function isPlaying(): boolean {
@@ -164,6 +179,8 @@ export function setPlayMode(next: PlayMode): void {
   const ui = useUiStore.getState()
   if (ui.playMode === next) return
   ui.setPlayMode(next)
+  // A loop belongs to one mode (section bars or a stretch of the song), so drop it when leaving that mode.
+  if (ui.loop && (ui.loop.scope === 'song') !== (next === 'song')) ui.setLoop(null)
   if (repeatId !== null && mode !== next) {
     const song = useSongStore.getState().song
     if (next === 'song') {
@@ -198,4 +215,33 @@ export function cue(localStep: number): void {
     position = (placement?.start ?? 0) + localStep
   }
   engine.releaseAll()
+}
+
+/**
+ * Sets (or clears) the loop range. A section loop switches to looping the section and a song loop
+ * to playing the song. While playing, playback jumps into the new loop if it's outside it.
+ */
+export function setLoop(loop: LoopRange | null): void {
+  const ui = useUiStore.getState()
+  ui.setLoop(loop)
+  if (!loop) return
+  const song = useSongStore.getState().song
+  if (loop.scope === 'section') {
+    ui.setStartStep(loop.start)
+  } else {
+    // Select the block the loop starts in, so the start marker sits at the loop start.
+    const found = locate(layoutArrangement(song), loop.start)
+    if (found) ui.selectEntry(found.placement.entry.id, found.placement.section.id, found.localStep)
+  }
+  const wanted: PlayMode = loop.scope === 'song' ? 'song' : 'section'
+  const modeChanged = ui.playMode !== wanted
+  if (modeChanged) ui.setPlayMode(wanted)
+  mode = wanted
+  if (repeatId === null) return
+  const bounds = activeLoop(song, selectedSection(song))
+  // Positions mean different things in the two modes, so a mode change always restarts at the loop.
+  if (bounds && (modeChanged || position < bounds.start || position >= bounds.end)) {
+    position = bounds.start
+    engine.releaseAll()
+  }
 }

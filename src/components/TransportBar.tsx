@@ -1,4 +1,4 @@
-import { togglePlay } from '../audio/scheduler'
+import { setLoop, togglePlay } from '../audio/scheduler'
 import { findSection } from '../model/arrangement'
 import { SCALES, SCALE_IDS, pitchClassName } from '../model/music'
 import { MAX_BARS, MAX_BPM, MIN_BARS, MIN_BPM, STEPS_PER_BAR, STEPS_PER_BEAT, type ScaleId } from '../model/types'
@@ -8,7 +8,7 @@ import { useUiStore } from '../state/uiStore'
 import { Fader } from './common/Fader'
 import { formatDb } from './common/format'
 import { NumberField } from './common/NumberField'
-import { PlayIcon, RedoIcon, StopIcon, UndoIcon, WaveIcon } from './common/icons'
+import { CloseIcon, LoopIcon, PlayIcon, RedoIcon, StopIcon, UndoIcon, WaveIcon } from './common/icons'
 import styles from './TransportBar.module.css'
 
 const ROOT_LABELS = Array.from({ length: 12 }, (_, pc) => {
@@ -27,6 +27,29 @@ function Position() {
   return (
     <div className={styles.position} aria-label="Playback position">
       {bar}.{beat}.{sixteenth}
+    </div>
+  )
+}
+
+/** Shows the active loop range, with a button to clear it. */
+function LoopChip() {
+  const loop = useUiStore((s) => s.loop)
+  const sectionName = useSongStore((s) => (loop?.scope === 'section' ? findSection(s.song, loop.sectionId)?.name : null))
+  if (!loop) return null
+  const first = loop.start / STEPS_PER_BAR + 1
+  const last = loop.end / STEPS_PER_BAR
+  const bars = first === last ? `bar ${first}` : `bars ${first}–${last}`
+  const where = loop.scope === 'section' ? `of ${sectionName ?? 'the section'}` : 'of the song'
+  return (
+    <div className={styles.loopChip} title={`Looping ${bars} ${where}`}>
+      <LoopIcon size={13} />
+      <span>
+        {first === last ? `Bar ${first}` : `${first}–${last}`}
+        <span className={styles.loopWhere}> {loop.scope === 'section' ? sectionName : 'song'}</span>
+      </span>
+      <button className={styles.loopClear} onClick={() => setLoop(null)} aria-label="Clear loop" title="Clear loop">
+        <CloseIcon size={11} />
+      </button>
     </div>
   )
 }
@@ -61,6 +84,7 @@ export function TransportBar() {
           {isPlaying ? <StopIcon size={18} /> : <PlayIcon size={18} />}
         </button>
         <Position />
+        <LoopChip />
         {!audioReady && <span className={styles.hint}>Press play to enable audio</span>}
       </div>
 

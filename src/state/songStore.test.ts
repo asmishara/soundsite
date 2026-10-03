@@ -190,6 +190,35 @@ describe('arrangement', () => {
   })
 })
 
+describe('replacing content', () => {
+  it('replaces some or all of a part’s notes as one undo step', () => {
+    const [a, b] = store().addNotes(part, [
+      { pitch: 60, start: 0, length: 4, velocity: 0.8 },
+      { pitch: 64, start: 0, length: 4, velocity: 0.8 },
+    ])
+    const before = store().past.length
+    store().replaceNotes(part, [a], [{ pitch: 72, start: 8, length: 2, velocity: 0.5 }])
+    expect(notes().map((n) => n.pitch).sort()).toEqual([64, 72])
+    expect(notes().some((n) => n.id === b)).toBe(true)
+
+    store().replaceNotes(part, null, [{ pitch: 48, start: 0, length: 999, velocity: 0.5 }])
+    expect(notes().map((n) => [n.pitch, n.length])).toEqual([[48, 64]]) // clamped to the section
+    expect(store().past.length).toBe(before + 2)
+    store().undo()
+    expect(notes().map((n) => n.pitch).sort()).toEqual([64, 72])
+  })
+
+  it('fits a drum pattern to the section', () => {
+    const drumId = store().addDrumTrack()
+    const drumPart = { trackId: drumId, sectionId: part.sectionId }
+    const short = { ...partPattern(drums(drumId), part.sectionId)!, kick: [1, 0, 0, 0, 1] }
+    store().setDrumPattern(drumPart, short)
+    const kick = partPattern(drums(drumId), part.sectionId)!.kick
+    expect(kick).toHaveLength(64)
+    expect(kick.slice(0, 6)).toEqual([1, 0, 0, 0, 1, 0])
+  })
+})
+
 describe('drums', () => {
   it('sets and clears steps', () => {
     const drumId = store().addDrumTrack()

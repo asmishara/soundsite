@@ -42,6 +42,9 @@ export type Note = {
   velocity: number
 }
 
+/** A note that hasn't been given an id yet. */
+export type NewNote = Omit<Note, 'id'>
+
 export type Mixer = {
   /** dB, -60 … +6 */
   volume: number

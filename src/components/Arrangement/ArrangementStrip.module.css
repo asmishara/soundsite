@@ -71,13 +71,46 @@
 .content {
   position: relative;
   flex-shrink: 0;
-  height: 46px;
+  height: 58px;
   touch-action: none;
+}
+
+/* Bar lane above the blocks: click to play from a bar, drag to loop. */
+.timeline {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  right: 0;
+  height: 11px;
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(to right, var(--text-faint) 0 1px, transparent 1px calc(var(--bar) * 4)) 0 0 / 100% 100%,
+    repeating-linear-gradient(to right, var(--border-strong) 0 1px, transparent 1px var(--bar)) 0 100% / 100% 50% no-repeat,
+    var(--bg);
+  cursor: pointer;
+}
+
+.timeline:hover {
+  background-color: var(--panel);
+}
+
+.loopBand {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: rgba(139, 157, 255, 0.45);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  pointer-events: none;
+}
+
+.loopPreview {
+  background: rgba(139, 157, 255, 0.22);
 }
 
 .block {
   position: absolute;
-  top: 3px;
+  top: 16px;
   bottom: 3px;
   display: flex;
   flex-direction: column;

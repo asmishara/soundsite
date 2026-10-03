@@ -1,3 +1,5 @@
+import { ComposeMenu } from './Compose/ComposeMenu'
+import { DrumPatternMenu } from './Compose/DrumPatternMenu'
 import { CHORD_QUALITIES, CHORD_QUALITY_IDS } from '../model/music'
 import { INSTRUMENT_PRESETS, INSTRUMENT_PRESET_IDS } from '../model/presets'
 import type { InstrumentPresetId, Section, Track } from '../model/types'
@@ -52,8 +54,9 @@ export function EditorToolbar({ track, section }: { track: Track; section: Secti
     return (
       <div className={styles.bar}>
         <Title track={track} section={section} />
+        <DrumPatternMenu track={track} section={section} />
         <span className={styles.help}>
-          Click a cell to toggle · drag to paint · <kbd>Shift</kbd>+click for an accent · click a name to audition
+          Click to toggle · drag to paint · <kbd>Shift</kbd>+click for an accent · click a name to audition
         </span>
         <div className={styles.spacer} />
         <ZoomControls />
@@ -66,6 +69,7 @@ export function EditorToolbar({ track, section }: { track: Track; section: Secti
   return (
     <div className={styles.bar}>
       <Title track={track} section={section} />
+      <ComposeMenu track={track} section={section} />
 
       <select
         className="control"
