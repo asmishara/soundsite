@@ -68,6 +68,8 @@ Then open the URL Vite prints. Browsers only allow audio after a user gesture, s
 | `npm test` | Run the unit tests (Vitest) |
 | `npm run lint` | Lint with oxlint |
 
+GitHub Actions runs lint, the unit tests and the build on every pull request and on pushes to `master` (see `.github/workflows/ci.yml`).
+
 ## Keyboard shortcuts
 
 | Keys | Action |
