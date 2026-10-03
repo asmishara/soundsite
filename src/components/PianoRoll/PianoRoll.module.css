@@ -1,0 +1,296 @@
+.roll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--panel);
+}
+
+.scroller {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.inner {
+  position: relative;
+  min-width: 100%;
+}
+
+/* Header row: sticks to the top; the corner inside it also sticks to the left. */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+}
+
+.corner {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  flex-shrink: 0;
+  background: var(--panel-2);
+  border-right: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.ruler {
+  position: relative;
+  flex-shrink: 0;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border-strong);
+  overflow: hidden;
+}
+
+.rulerTicks {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(to right, var(--text-faint) 0 1px, transparent 1px calc(var(--step) * 16)),
+    repeating-linear-gradient(to right, var(--border-strong) 0 1px, transparent 1px calc(var(--step) * 4));
+  background-size:
+    100% 100%,
+    100% 35%;
+  background-position: 0 0, 0 100%;
+  background-repeat: repeat-x;
+}
+
+.barNumber {
+  position: absolute;
+  top: 4px;
+  padding-left: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.body {
+  display: flex;
+}
+
+/* Keyboard */
+.keys {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  flex-shrink: 0;
+  width: 64px;
+  /* Shows through to the right of the shortened black keys, like a real keyboard. */
+  background: var(--key-white);
+  border-right: 1px solid var(--border-strong);
+}
+
+.key {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 5px;
+  cursor: pointer;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.keyWhite {
+  background: var(--key-white);
+  color: #3b4250;
+}
+
+.keyBlack {
+  background: var(--key-black);
+  margin-right: 22px;
+  border-radius: 0 3px 3px 0;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.key:active {
+  background: var(--accent);
+}
+
+.keyC {
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.keyLabel {
+  font-size: 10px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.rootDot {
+  position: absolute;
+  left: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  pointer-events: none;
+}
+
+.keyBlack .rootDot {
+  background: var(--accent);
+}
+
+.outOfKey {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 15, 19, 0.18);
+  pointer-events: none;
+}
+
+/* Grid */
+.grid {
+  position: relative;
+  flex-shrink: 0;
+  cursor: crosshair;
+  touch-action: none;
+  overflow: hidden;
+}
+
+.gridSelect {
+  cursor: default;
+}
+
+.rows {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.row {
+  position: relative;
+}
+
+.rowWhite {
+  background: var(--row-white);
+}
+
+.rowBlack {
+  background: var(--row-black);
+}
+
+.rowInScale::after,
+.rowRoot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--row-in-scale);
+}
+
+.rowRoot::after {
+  background: var(--row-root);
+}
+
+.rowC {
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.09);
+}
+
+.lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(to right, var(--grid-bar) 0 1px, transparent 1px calc(var(--step) * 16)),
+    repeating-linear-gradient(to right, var(--grid-beat) 0 1px, transparent 1px calc(var(--step) * 4)),
+    repeating-linear-gradient(to right, var(--grid-step) 0 1px, transparent 1px var(--step));
+}
+
+/* Notes */
+.note {
+  position: absolute;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--note-color) calc(var(--note-alpha) * 100%), #0d0f13);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  cursor: grab;
+  overflow: hidden;
+}
+
+.note:active {
+  cursor: grabbing;
+}
+
+.noteSelected {
+  background: color-mix(in srgb, var(--note-color) 55%, #ffffff);
+  box-shadow:
+    0 0 0 1.5px #fff,
+    0 0 10px color-mix(in srgb, var(--note-color) 70%, transparent);
+  z-index: 2;
+}
+
+.noteLabel {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9.5px;
+  font-weight: 650;
+  color: rgba(10, 12, 16, 0.75);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.resizeHandle:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ghost {
+  position: absolute;
+  border-radius: 3px;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+/* Playhead */
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--playhead);
+  box-shadow: 0 0 8px rgba(255, 209, 102, 0.6);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.playheadMarker {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 5px;
+  background: var(--playhead);
+  pointer-events: none;
+}
+
+.marquee {
+  position: absolute;
+  border: 1px solid var(--accent);
+  background: rgba(139, 157, 255, 0.12);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.emptyHint {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(20, 23, 29, 0.85);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  pointer-events: none;
+  z-index: 6;
+}

@@ -1,0 +1,42 @@
+.knob {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.dial {
+  cursor: ns-resize;
+  border-radius: 50%;
+  touch-action: none;
+}
+
+.dial svg {
+  display: block;
+}
+
+.track {
+  fill: none;
+  stroke: var(--panel-4);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+}
+
+.value {
+  fill: none;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+}
+
+.pointer {
+  stroke: var(--text);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.caption {
+  font-size: 10px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}

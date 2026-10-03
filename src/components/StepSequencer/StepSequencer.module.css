@@ -1,0 +1,139 @@
+.seq {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--panel);
+}
+
+.scroller {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+
+.inner {
+  min-width: 100%;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+}
+
+.corner {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  flex-shrink: 0;
+  background: var(--panel-2);
+  border-right: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.ruler {
+  position: relative;
+  flex-shrink: 0;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border-strong);
+  overflow: hidden;
+}
+
+.body {
+  display: flex;
+  padding-bottom: 12px;
+}
+
+.labels {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-2);
+  border-right: 1px solid var(--border-strong);
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: left;
+}
+
+.label:hover {
+  background: var(--panel-3);
+  color: var(--text);
+}
+
+.label:active {
+  background: var(--accent-soft);
+}
+
+.grid {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.cell {
+  position: relative;
+  border-bottom: 1px solid var(--border);
+  background: var(--row-white);
+}
+
+.cellAltBeat {
+  background: var(--row-black);
+}
+
+.cellBarStart {
+  box-shadow: inset 1px 0 0 var(--grid-bar);
+}
+
+.cell::after {
+  content: '';
+  position: absolute;
+  inset: 3px 2px;
+  border-radius: 4px;
+  background: var(--panel-3);
+  transition: background 0.06s;
+}
+
+.cell:hover::after {
+  background: var(--panel-4);
+}
+
+.cellOn::after,
+.cellOn:hover::after {
+  background: color-mix(in srgb, var(--track-color) calc(var(--velocity) * 100%), #1a1e26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.cellAccent::after,
+.cellAccent:hover::after {
+  background: color-mix(in srgb, var(--track-color) 75%, #ffffff);
+  box-shadow:
+    0 0 0 1.5px rgba(255, 255, 255, 0.75),
+    0 0 10px color-mix(in srgb, var(--track-color) 60%, transparent);
+}
+
+.playColumn {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(255, 209, 102, 0.13);
+  box-shadow:
+    inset 1px 0 0 rgba(255, 209, 102, 0.5),
+    inset -1px 0 0 rgba(255, 209, 102, 0.5);
+  pointer-events: none;
+}

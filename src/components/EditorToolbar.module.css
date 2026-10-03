@@ -1,0 +1,100 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  min-height: 44px;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  padding-right: 4px;
+}
+
+.title::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--track-color);
+}
+
+.group,
+.segmented {
+  display: flex;
+  gap: 4px;
+}
+
+.segmented :global(.btn) {
+  border-radius: 0;
+}
+
+.segmented :global(.btn):first-child {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.segmented :global(.btn):last-child {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-left: -5px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-strong);
+}
+
+.chord {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(139, 157, 255, 0.35);
+}
+
+.chordName {
+  font-weight: 650;
+}
+
+.roman {
+  font-family: Georgia, 'Times New Roman', serif;
+  color: var(--text-dim);
+}
+
+.help {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.help kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-3);
+}
+
+.spacer {
+  flex: 1;
+}
+
+@media (max-width: 1280px) {
+  .toolLabel {
+    display: none;
+  }
+}

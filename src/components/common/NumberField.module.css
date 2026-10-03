@@ -1,0 +1,10 @@
+.field {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.field:focus {
+  border-color: var(--accent);
+  background: var(--panel);
+}
