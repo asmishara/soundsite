@@ -6,14 +6,16 @@ import styles from './PianoRoll.module.css'
 
 type NoteBlockProps = {
   note: Note
+  /** The section's length in steps; a note running past it is drawn (and resized) up to the end. */
+  steps: number
   zoom: number
   color: string
   selected: boolean
   preferFlats: boolean
 }
 
-export const NoteBlock = memo(function NoteBlock({ note, zoom, color, selected, preferFlats }: NoteBlockProps) {
-  const width = note.length * zoom
+export const NoteBlock = memo(function NoteBlock({ note, steps, zoom, color, selected, preferFlats }: NoteBlockProps) {
+  const width = Math.max(1, Math.min(note.length, steps - note.start)) * zoom
   return (
     <div
       data-note-id={note.id}

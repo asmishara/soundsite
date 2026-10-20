@@ -18,20 +18,28 @@ class AudioEngine {
     return this.graph !== null
   }
 
-  /** Unlocks audio (must be called from a user gesture) and builds the graph. Safe to call repeatedly. */
+  /**
+   * Unlocks audio (must be called from a user gesture) and builds the graph. Safe to call repeatedly;
+   * if starting fails, the next call tries again instead of returning the same failure.
+   */
   start(): Promise<void> {
     if (this.graph) return Promise.resolve()
     this.starting ??= (async () => {
-      await Tone.start()
-      const song = useSongStore.getState().song
-      this.graph = new AudioGraph(song)
-      this.syncTransport(song)
-      useSongStore.subscribe((state, prev) => {
-        if (state.song === prev.song) return
-        this.graph?.sync(state.song)
-        this.syncTransport(state.song)
-      })
-      useUiStore.getState().setAudioReady(true)
+      try {
+        await Tone.start()
+        const song = useSongStore.getState().song
+        this.graph = new AudioGraph(song)
+        this.syncTransport(song)
+        useSongStore.subscribe((state, prev) => {
+          if (state.song === prev.song) return
+          this.graph?.sync(state.song)
+          this.syncTransport(state.song)
+        })
+        useUiStore.getState().setAudioReady(true)
+      } catch (err) {
+        this.starting = null
+        throw err
+      }
     })()
     return this.starting
   }
@@ -52,7 +60,12 @@ class AudioEngine {
 
   /** Auditions a pitch (instrument tracks) or a drum voice right now. */
   async preview(trackId: string, what: number | DrumVoiceId, velocity = 0.8): Promise<void> {
-    await this.start()
+    try {
+      await this.start()
+    } catch {
+      // Play reports start failures; a missed audition isn't worth a second message.
+      return
+    }
     const time = Tone.now() + 0.01
     if (typeof what === 'number') this.triggerNote(trackId, what, 0.3, time, velocity)
     else if (DRUM_VOICE_IDS.includes(what)) this.triggerDrum(trackId, what, time, velocity)

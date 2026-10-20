@@ -4,6 +4,7 @@ import { copyName, nextSectionColor, nextSectionName, sectionSteps } from '../mo
 import { createDemoSong } from '../model/demoSong'
 import { createDrumTrack, createEntry, createInstrumentTrack, createSection, emptyDrumSteps } from '../model/factory'
 import { newId } from '../model/ids'
+import { DRUM_VOICE_IDS } from '../model/presets'
 import { MAX_NAME_LENGTH, clamp, sanitizeNote } from '../model/rules'
 import {
   MAX_BARS,
@@ -34,18 +35,30 @@ type SongState = {
   song: Song
   past: Song[]
   future: Song[]
-  /** Snapshot taken by beginTransaction(); edits made while set don't create history entries. */
+  /** Snapshot taken when the first transaction opened; edits made while set don't create history entries. */
   txBase: Song | null
+  /** Tokens of the transactions currently open (nested ones join the outermost). */
+  txOwners: number[]
 
   /** Replaces the song and clears history (used when restoring a session). */
   loadSong: (song: Song) => void
   /** Replaces the song as an undoable edit (New song, Open file). */
   replaceSong: (song: Song) => void
+  /** Undo and redo first close any open transaction, so a drag interrupted by undo stops editing. */
   undo: () => void
   redo: () => void
-  beginTransaction: () => void
-  endTransaction: () => void
-  cancelTransaction: () => void
+  /**
+   * Opens a transaction: edits until the matching end() become one undo step. Returns a token that
+   * end/cancel take, so a stray end from one gesture can't close another's transaction.
+   */
+  beginTransaction: () => number
+  endTransaction: (token: number) => void
+  /** Reverts the edits made since the outermost transaction opened (only when `token` is the last one open). */
+  cancelTransaction: (token: number) => void
+  /** False once the transaction has ended, or was closed early by undo/redo or a song switch. */
+  isTransactionOpen: (token: number) => boolean
+  /** Runs `fn` as a single undo step. */
+  transact: <T>(fn: () => T) => T
 
   setName: (name: string) => void
   setBpm: (bpm: number) => void
@@ -103,10 +116,26 @@ function draftPattern(song: Draft<Song>, part: PartRef): Draft<DrumPattern> | nu
   return track.steps[section.id]
 }
 
+/**
+ * New notes, kept inside the section and pitch range. One that would start past the section's end is
+ * dropped rather than squeezed onto its last step.
+ */
+function fitToSection(notes: Note[], section: Section): Note[] {
+  const total = sectionSteps(section)
+  const fitted = notes.filter((n) => Math.round(n.start) < total)
+  for (const note of fitted) sanitizeNote(note, section.bars)
+  return fitted
+}
+
 function liveNotes(song: Song, part: PartRef): Note[] {
   const track = song.tracks.find((t) => t.id === part.trackId)
   return track?.kind === 'instrument' ? (track.notes[part.sectionId] ?? []) : []
 }
+
+let lastToken = 0
+
+/** Matches the colors the color picker produces; anything else is ignored. */
+const HEX_COLOR = /^#[0-9a-f]{6}$/i
 
 export const useSongStore = create<SongState>()((set, get) => {
   /** Applies an immer recipe to the song, recording one undo step unless inside a transaction or nothing changed. */
@@ -119,6 +148,14 @@ export const useSongStore = create<SongState>()((set, get) => {
     } else {
       set((s) => ({ song: next, past: [...s.past, song].slice(-HISTORY_LIMIT), future: [] }))
     }
+  }
+
+  /** Commits whatever the open transactions changed as one undo step, and forgets all their tokens. */
+  const closeTransactions = () => {
+    const { txBase, song } = get()
+    if (!txBase) return
+    if (txBase === song) set({ txBase: null, txOwners: [] })
+    else set((s) => ({ txBase: null, txOwners: [], past: [...s.past, txBase].slice(-HISTORY_LIMIT), future: [] }))
   }
 
   /** Inserts a new entry for `sectionId` right after `afterEntryId` (or at the end). */
@@ -135,45 +172,61 @@ export const useSongStore = create<SongState>()((set, get) => {
     past: [],
     future: [],
     txBase: null,
+    txOwners: [],
 
-    loadSong: (song) => set({ song, past: [], future: [], txBase: null }),
+    loadSong: (song) => set({ song, past: [], future: [], txBase: null, txOwners: [] }),
 
     replaceSong: (song) => {
-      get().endTransaction()
+      closeTransactions()
       set((s) => ({ song, past: [...s.past, s.song].slice(-HISTORY_LIMIT), future: [] }))
     },
 
     undo: () => {
-      get().endTransaction()
+      closeTransactions()
       const { past, song, future } = get()
       if (past.length === 0) return
       set({ song: past[past.length - 1], past: past.slice(0, -1), future: [song, ...future] })
     },
 
     redo: () => {
-      get().endTransaction()
+      closeTransactions()
       const { past, song, future } = get()
       if (future.length === 0) return
       set({ song: future[0], past: [...past, song].slice(-HISTORY_LIMIT), future: future.slice(1) })
     },
 
     beginTransaction: () => {
-      if (!get().txBase) set({ txBase: get().song })
+      const token = ++lastToken
+      set((s) => ({ txBase: s.txBase ?? s.song, txOwners: [...s.txOwners, token] }))
+      return token
     },
 
-    endTransaction: () => {
-      const { txBase, song } = get()
-      if (!txBase) return
-      if (txBase === song) {
-        set({ txBase: null })
-      } else {
-        set((s) => ({ txBase: null, past: [...s.past, txBase].slice(-HISTORY_LIMIT), future: [] }))
+    endTransaction: (token) => {
+      const { txOwners } = get()
+      if (!txOwners.includes(token)) return
+      const rest = txOwners.filter((t) => t !== token)
+      if (rest.length > 0) set({ txOwners: rest })
+      else closeTransactions()
+    },
+
+    cancelTransaction: (token) => {
+      const { txOwners, txBase } = get()
+      if (!txOwners.includes(token)) return
+      const rest = txOwners.filter((t) => t !== token)
+      // An inner transaction can't be reverted on its own, so only the last one out rolls back.
+      if (rest.length > 0) set({ txOwners: rest })
+      else set({ song: txBase ?? get().song, txBase: null, txOwners: [] })
+    },
+
+    isTransactionOpen: (token) => get().txOwners.includes(token),
+
+    transact: (fn) => {
+      const token = get().beginTransaction()
+      try {
+        return fn()
+      } finally {
+        get().endTransaction(token)
       }
-    },
-
-    cancelTransaction: () => {
-      const { txBase } = get()
-      if (txBase) set({ song: txBase, txBase: null })
     },
 
     setName: (name) =>
@@ -218,18 +271,17 @@ export const useSongStore = create<SongState>()((set, get) => {
         if (!section || n === section.bars) return
         section.bars = n
         const total = n * STEPS_PER_BAR
+        // Shortening only hides what's past the new end (it isn't shown, played or exported), so
+        // making the section longer again brings it back. Growing pads the drum patterns.
         for (const track of s.tracks) {
           if (track.kind === 'drums') {
             const pattern = (track.steps[sectionId] ??= emptyDrumSteps(n))
-            for (const voice of Object.keys(pattern) as DrumVoiceId[]) {
-              const arr = pattern[voice]
-              if (arr.length > total) arr.length = total
+            for (const voice of DRUM_VOICE_IDS) {
+              const arr = (pattern[voice] ??= [])
               while (arr.length < total) arr.push(0)
             }
           } else {
-            const notes = (track.notes[sectionId] ?? []).filter((note) => note.start < total)
-            for (const note of notes) note.length = Math.min(note.length, total - note.start)
-            track.notes[sectionId] = notes
+            track.notes[sectionId] ??= []
           }
         }
       }),
@@ -348,8 +400,8 @@ export const useSongStore = create<SongState>()((set, get) => {
       edit((s) => {
         const track = s.tracks.find((t) => t.id === id)
         if (!track) return
-        if (patch.name !== undefined) track.name = patch.name.trim() || track.name
-        if (patch.color !== undefined) track.color = patch.color
+        if (patch.name !== undefined) track.name = patch.name.trim().slice(0, MAX_NAME_LENGTH) || track.name
+        if (patch.color !== undefined && HEX_COLOR.test(patch.color)) track.color = patch.color
         if (patch.preset !== undefined && track.kind === 'instrument') track.preset = patch.preset
       }),
 
@@ -377,26 +429,32 @@ export const useSongStore = create<SongState>()((set, get) => {
 
     addNotes: (part, notes) => {
       const created: Note[] = notes.map((n) => ({ ...n, id: n.id ?? newId('note') }))
+      const added: string[] = []
       edit((s) => {
         const target = draftNotes(s, part)
         if (!target) return
-        for (const note of created) {
-          sanitizeNote(note, target.section.bars)
+        for (const note of fitToSection(created, target.section)) {
           target.notes.push(note)
+          added.push(note.id)
         }
       })
-      return created.map((n) => n.id)
+      return added
     },
 
     updateNotes: (part, patches) =>
       edit((s) => {
         const target = draftNotes(s, part)
         if (!target) return
+        const total = sectionSteps(target.section)
         for (const note of target.notes) {
           const patch = patches[note.id]
-          if (!patch) continue
+          // Notes hidden past the end of a shortened section can't be edited.
+          if (!patch || note.start >= total) continue
+          const length = note.length
           Object.assign(note, patch)
           sanitizeNote(note, target.section.bars)
+          // Moving or transposing keeps a note's length, so a tail hidden past a shortened end isn't cut.
+          if (patch.length === undefined) note.length = clamp(length, 1, MAX_BARS * STEPS_PER_BAR - note.start)
         }
       }),
 
@@ -433,16 +491,20 @@ export const useSongStore = create<SongState>()((set, get) => {
 
     replaceNotes: (part, removeIds, add) => {
       const created: Note[] = add.map((n) => ({ ...n, id: n.id ?? newId('note') }))
+      const added: string[] = []
       edit((s) => {
         const target = draftNotes(s, part)
         if (!target) return
         const doomed = removeIds ? new Set(removeIds) : null
-        const kept = doomed ? target.notes.filter((n) => !doomed.has(n.id)) : []
-        for (const note of created) sanitizeNote(note, target.section.bars)
+        // Replacing all of a section's notes still keeps the ones hidden past a shortened end.
+        const total = sectionSteps(target.section)
+        const kept = target.notes.filter((n) => (doomed ? !doomed.has(n.id) : n.start >= total))
+        const fitted = fitToSection(created, target.section)
+        added.push(...fitted.map((n) => n.id))
         const track = s.tracks.find((t) => t.id === part.trackId)
-        if (track?.kind === 'instrument') track.notes[part.sectionId] = [...kept, ...created]
+        if (track?.kind === 'instrument') track.notes[part.sectionId] = [...kept, ...fitted]
       })
-      return created.map((n) => n.id)
+      return added
     },
 
     setDrumPattern: (part, pattern) =>
@@ -451,11 +513,16 @@ export const useSongStore = create<SongState>()((set, get) => {
         const section = s.sections.find((x) => x.id === part.sectionId)
         if (track?.kind !== 'drums' || !section) return
         const total = section.bars * STEPS_PER_BAR
-        // Fit the pattern to the section, padding or trimming each voice.
+        const old = track.steps[section.id] as DrumPattern | undefined
+        // Fit the pattern to the section, padding or trimming each voice. Hits hidden past a
+        // shortened end are kept.
         track.steps[section.id] = Object.fromEntries(
           Object.entries(pattern).map(([voice, steps]) => [
             voice,
-            Array.from({ length: total }, (_, i) => clamp(steps[i] ?? 0, 0, 1)),
+            [
+              ...Array.from({ length: total }, (_, i) => clamp(steps[i] ?? 0, 0, 1)),
+              ...(old?.[voice as DrumVoiceId]?.slice(total) ?? []),
+            ],
           ]),
         ) as DrumPattern
       }),

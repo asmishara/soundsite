@@ -1,6 +1,7 @@
 import type { DelayTime } from '../../model/types'
 import { useSongStore } from '../../state/songStore'
 import { Knob } from '../common/Knob'
+import { Select } from '../common/Select'
 import styles from './Mixer.module.css'
 
 const DELAY_TIMES: { value: DelayTime; label: string }[] = [
@@ -48,7 +49,7 @@ export function FxPanel() {
         </div>
         <div className={styles.fxControls}>
           <label className={styles.fxSelect}>
-            <select
+            <Select
               className="control"
               value={fx.delayTime}
               aria-label="Delay time"
@@ -59,7 +60,7 @@ export function FxPanel() {
                   {d.label}
                 </option>
               ))}
-            </select>
+            </Select>
             <span className={styles.fxCaption}>Time</span>
           </label>
           <Knob

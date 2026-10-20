@@ -5,6 +5,7 @@ import { FILE_EXTENSION, SongFileError, parseSong, serializeSong, songFileName, 
 import type { Song } from '../model/types'
 import { useSongStore } from './songStore'
 import { useUiStore } from './uiStore'
+import { noticeWithUndo } from './undoNotice'
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 
@@ -19,6 +20,11 @@ function downloadBlob(blob: Blob, fileName: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+/** Downloads text as a file, e.g. a saved song that couldn't be opened. */
+export function downloadText(text: string, fileName: string, type = 'application/json'): void {
+  downloadBlob(new Blob([text], { type }), fileName)
+}
+
 /** Swaps in a song as one undoable step and offers Undo in a toast. */
 function switchTo(song: Song, message: string): void {
   if (isPlaying()) stop()
@@ -27,7 +33,7 @@ function switchTo(song: Song, message: string): void {
   ui.selectTrack(song.tracks[0]?.id ?? null)
   const first = song.arrangement[0]
   if (first) ui.selectEntry(first.id, first.sectionId, 0)
-  ui.showNotice(message, 'info', { label: 'Undo', run: () => useSongStore.getState().undo() })
+  noticeWithUndo(message)
 }
 
 export function newSong(kind: 'blank' | 'demo'): void {

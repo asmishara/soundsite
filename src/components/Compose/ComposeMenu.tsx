@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useDismiss } from '../../hooks/useDismiss'
-import { partNotes, sectionSteps } from '../../model/arrangement'
+import { sectionSteps, visibleNotes } from '../../model/arrangement'
 import { arpeggiate, type ArpPattern, type ArpSettings } from '../../model/compose/arpeggiate'
 import {
   PROGRESSIONS,
@@ -13,8 +13,10 @@ import {
 import type { InstrumentTrack, Section } from '../../model/types'
 import { useComposeStore } from '../../state/composeStore'
 import { useSongStore } from '../../state/songStore'
+import { noticeWithUndo } from '../../state/undoNotice'
 import { useUiStore } from '../../state/uiStore'
 import { SparkleIcon } from '../common/icons'
+import { Select } from '../common/Select'
 import styles from './Compose.module.css'
 
 type Choice<T> = { value: T; label: string }
@@ -82,10 +84,6 @@ const ARP_PATTERNS: Choice<ArpPattern>[] = [
   { value: 'random', label: 'Random' },
 ]
 
-function undoAction() {
-  return { label: 'Undo', run: () => useSongStore.getState().undo() }
-}
-
 function ProgressionTool({ track, section }: { track: InstrumentTrack; section: Section }) {
   const key = useSongStore((s) => s.song.key)
   const tracks = useSongStore((s) => s.song.tracks)
@@ -115,14 +113,14 @@ function ProgressionTool({ track, section }: { track: InstrumentTrack; section: 
       bass: bassTrack ? bass : 'none',
     })
     const store = useSongStore.getState()
-    store.beginTransaction()
-    store.replaceNotes({ trackId: track.id, sectionId: section.id }, null, chords)
-    if (bassTrack && bass !== 'none') store.replaceNotes({ trackId: bassTrack.id, sectionId: section.id }, null, bassLine)
-    store.endTransaction()
+    store.transact(() => {
+      store.replaceNotes({ trackId: track.id, sectionId: section.id }, null, chords)
+      if (bassTrack && bass !== 'none') store.replaceNotes({ trackId: bassTrack.id, sectionId: section.id }, null, bassLine)
+    })
     const ui = useUiStore.getState()
     ui.setSelection([])
     const where = bassTrack && bass !== 'none' ? `${track.name} and ${bassTrack.name}` : track.name
-    ui.showNotice(`Wrote ${progression.name} (${names.join(' ')}) on ${where} in ${section.name}`, 'info', undoAction())
+    noticeWithUndo(`Wrote ${progression.name} (${names.join(' ')}) on ${where} in ${section.name}`)
   }
 
   return (
@@ -168,7 +166,7 @@ function ProgressionTool({ track, section }: { track: InstrumentTrack; section: 
               ))}
             </div>
             {bass !== 'none' && (
-              <select
+              <Select
                 className="control"
                 value={bassTrack?.id ?? ''}
                 aria-label="Bass line track"
@@ -179,7 +177,7 @@ function ProgressionTool({ track, section }: { track: InstrumentTrack; section: 
                     on {t.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
           </div>
         </div>
@@ -200,17 +198,22 @@ function ProgressionTool({ track, section }: { track: InstrumentTrack; section: 
 function ArpTool({ track, section }: { track: InstrumentTrack; section: Section }) {
   const selectedIds = useUiStore((s) => s.selectedNoteIds)
   const settings = useComposeStore((s) => s.arp)
-  const notes = partNotes(track, section.id)
+  const notes = visibleNotes(track, section)
   const selected = notes.filter((n) => selectedIds.includes(n.id))
   const target = selected.length > 0 ? selected : notes
   const update = (patch: Partial<ArpSettings>) => useComposeStore.getState().set({ arp: { ...settings, ...patch } })
 
   const apply = () => {
-    const { remove, add } = arpeggiate(target, settings)
+    // Only the part of a chord inside the section is arpeggiated; a tail hidden past a shortened end isn't.
+    const steps = sectionSteps(section)
+    const { remove, add } = arpeggiate(
+      target.map((n) => ({ ...n, length: Math.min(n.length, steps - n.start) })),
+      settings,
+    )
     const ids = useSongStore.getState().replaceNotes({ trackId: track.id, sectionId: section.id }, remove, add)
     const ui = useUiStore.getState()
     ui.setSelection(ids)
-    ui.showNotice(`Arpeggiated ${target.length} notes on ${track.name}`, 'info', undoAction())
+    noticeWithUndo(`Arpeggiated ${target.length} notes on ${track.name}`)
   }
 
   return (

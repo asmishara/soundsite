@@ -1,5 +1,7 @@
 import { setLoop, togglePlay } from '../audio/scheduler'
-import { findSection } from '../model/arrangement'
+import { useGestureTransaction } from '../hooks/useGestureTransaction'
+import { findSection, hiddenContentCount, layoutArrangement, sectionSteps, visibleNotes } from '../model/arrangement'
+import { loopBounds } from '../audio/loop'
 import { SCALES, SCALE_IDS, pitchClassName } from '../model/music'
 import { MAX_BARS, MAX_BPM, MIN_BARS, MIN_BPM, STEPS_PER_BAR, STEPS_PER_BEAT, type ScaleId } from '../model/types'
 import { usePlayheadStore } from '../state/playheadStore'
@@ -8,6 +10,7 @@ import { useUiStore } from '../state/uiStore'
 import { Fader } from './common/Fader'
 import { formatDb } from './common/format'
 import { NumberField } from './common/NumberField'
+import { Select } from './common/Select'
 import { CloseIcon, LoopIcon, PlayIcon, RedoIcon, StopIcon, UndoIcon, WaveIcon } from './common/icons'
 import styles from './TransportBar.module.css'
 
@@ -35,9 +38,18 @@ function Position() {
 function LoopChip() {
   const loop = useUiStore((s) => s.loop)
   const sectionName = useSongStore((s) => (loop?.scope === 'section' ? findSection(s.song, loop.sectionId)?.name : null))
-  if (!loop) return null
-  const first = loop.start / STEPS_PER_BAR + 1
-  const last = loop.end / STEPS_PER_BAR
+  // Show the range the scheduler actually loops: shortening the section or song can clip or void it.
+  const span = useSongStore((s) => {
+    if (loop?.scope === 'section') {
+      const section = findSection(s.song, loop.sectionId)
+      return section ? sectionSteps(section) : 0
+    }
+    return layoutArrangement(s.song).totalSteps
+  })
+  const bounds = loopBounds(loop, span)
+  if (!loop || !bounds) return null
+  const first = bounds.start / STEPS_PER_BAR + 1
+  const last = Math.ceil(bounds.end / STEPS_PER_BAR)
   const bars = first === last ? `bar ${first}` : `bars ${first}–${last}`
   const where = loop.scope === 'section' ? `of ${sectionName ?? 'the section'}` : 'of the song'
   return (
@@ -54,7 +66,30 @@ function LoopChip() {
   )
 }
 
+/**
+ * Sets a section's length. Shortening hides what's past the new end rather than deleting it, and a
+ * notice says so whenever more content becomes hidden. Hidden notes drop out of the selection.
+ */
+function changeSectionLength(sectionId: string, bars: number) {
+  const store = useSongStore.getState()
+  const before = hiddenContentCount(store.song, sectionId)
+  store.setSectionBars(sectionId, bars)
+  const song = useSongStore.getState().song
+  const section = findSection(song, sectionId)
+  if (!section) return
+  const ui = useUiStore.getState()
+  if (ui.selectedSectionId === sectionId && ui.selectedNoteIds.length > 0) {
+    const visible = new Set(song.tracks.flatMap((t) => (t.kind === 'instrument' ? visibleNotes(t, section) : [])).map((n) => n.id))
+    const kept = ui.selectedNoteIds.filter((id) => visible.has(id))
+    if (kept.length < ui.selectedNoteIds.length) ui.setSelection(kept)
+  }
+  if (hiddenContentCount(song, sectionId) > before) {
+    ui.showNotice(`Notes after bar ${section.bars} of ${section.name} are hidden, not deleted. Make the section longer to bring them back.`)
+  }
+}
+
 export function TransportBar() {
+  const swingGesture = useGestureTransaction()
   const isPlaying = usePlayheadStore((s) => s.isPlaying)
   const bpm = useSongStore((s) => s.song.bpm)
   const swing = useSongStore((s) => s.song.swing)
@@ -65,7 +100,7 @@ export function TransportBar() {
   const canUndo = useSongStore((s) => s.past.length > 0)
   const canRedo = useSongStore((s) => s.future.length > 0)
   const audioReady = useUiStore((s) => s.audioReady)
-  const { setBpm, setSwing, setSectionBars, setKey, setMasterVolume, undo, redo } = useSongStore.getState()
+  const { setBpm, setSwing, setKey, setMasterVolume, undo, redo } = useSongStore.getState()
 
   return (
     <header className={styles.bar}>
@@ -103,10 +138,11 @@ export function TransportBar() {
             step={0.01}
             value={swing}
             aria-label="Swing"
-            onPointerDown={() => useSongStore.getState().beginTransaction()}
-            onPointerUp={() => useSongStore.getState().endTransaction()}
-            onChange={(e) => setSwing(Number(e.target.value))}
-            onKeyDown={(e) => e.stopPropagation()}
+            {...swingGesture.rangeHandlers}
+            onChange={(e) => {
+              swingGesture.keepOpen()
+              setSwing(Number(e.target.value))
+            }}
           />
           <span className={styles.value}>{Math.round((swing / 0.6) * 100)}%</span>
         </label>
@@ -116,7 +152,7 @@ export function TransportBar() {
             value={section?.bars ?? 4}
             min={MIN_BARS}
             max={MAX_BARS}
-            onCommit={(n) => section && setSectionBars(section.id, n)}
+            onCommit={(n) => section && changeSectionLength(section.id, n)}
             label={`Length of ${section?.name ?? 'the section'} in bars`}
             width={44}
           />
@@ -126,7 +162,7 @@ export function TransportBar() {
       <div className={styles.group}>
         <label className={styles.field}>
           <span className="label">Key</span>
-          <select
+          <Select
             className="control"
             value={key.root}
             aria-label="Key root"
@@ -137,8 +173,8 @@ export function TransportBar() {
                 {label}
               </option>
             ))}
-          </select>
-          <select
+          </Select>
+          <Select
             className="control"
             value={key.scale}
             aria-label="Scale"
@@ -149,7 +185,7 @@ export function TransportBar() {
                 {SCALES[id].label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 

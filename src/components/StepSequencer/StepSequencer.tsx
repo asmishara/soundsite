@@ -32,7 +32,13 @@ export function StepSequencer({ track, section }: { track: DrumTrack; section: S
   const pattern = partPattern(track, section.id) ?? emptyDrumSteps(bars)
   const gridRef = useRef<HTMLDivElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
-  const paint = useRef<{ value: number; last: { voice: DrumVoiceId; step: number } } | null>(null)
+  const paint = useRef<{
+    value: number
+    last: { voice: DrumVoiceId; step: number }
+    tx: number
+    /** The pointer painting; other pointers (a second finger) are ignored until it lifts. */
+    pointerId: number
+  } | null>(null)
 
   useFollowPlayhead(scrollerRef, cellWidth, LABEL_WIDTH, section.id)
 
@@ -45,7 +51,8 @@ export function StepSequencer({ track, section }: { track: DrumTrack; section: S
   }
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return
+    // One gesture at a time: a second finger mustn't start another edit over the first.
+    if (e.button !== 0 || !e.isPrimary || paint.current) return
     const cell = cellAt(e)
     if (!cell) return
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -61,18 +68,23 @@ export function StepSequencer({ track, section }: { track: DrumTrack; section: S
         ? 0
         : NORMAL_VELOCITY
     const store = useSongStore.getState()
-    store.beginTransaction()
+    const tx = store.beginTransaction()
     store.setDrumStep(part, cell.voice, cell.step, value)
     if (value > 0) void engine.preview(track.id, cell.voice, value)
-    paint.current = { value, last: cell }
+    paint.current = { value, last: cell, tx, pointerId: e.pointerId }
   }
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const p = paint.current
-    if (!p) return
+    if (!p || e.pointerId !== p.pointerId) return
+    const store = useSongStore.getState()
+    if (!store.isTransactionOpen(p.tx)) {
+      // Undo ran mid-drag and closed the transaction, so stop painting.
+      paint.current = null
+      return
+    }
     const cell = cellAt(e)
     if (!cell || (cell.voice === p.last.voice && cell.step === p.last.step)) return
-    const store = useSongStore.getState()
     // Fill any steps skipped by a fast drag along the same row.
     const from = cell.voice === p.last.voice ? p.last.step : cell.step
     const dir = Math.sign(cell.step - from)
@@ -81,10 +93,11 @@ export function StepSequencer({ track, section }: { track: DrumTrack; section: S
     p.last = cell
   }
 
-  const onPointerUp = () => {
-    if (!paint.current) return
+  const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    const p = paint.current
+    if (!p || e.pointerId !== p.pointerId) return
     paint.current = null
-    useSongStore.getState().endTransaction()
+    useSongStore.getState().endTransaction(p.tx)
   }
 
   return (
@@ -125,9 +138,10 @@ export function StepSequencer({ track, section }: { track: DrumTrack; section: S
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
+              onLostPointerCapture={onPointerUp}
             >
               {DRUM_VOICES.map((v) =>
-                pattern[v.id].map((velocity, step) => {
+                pattern[v.id].slice(0, total).map((velocity, step) => {
                   const beat = Math.floor(step / STEPS_PER_BEAT)
                   const classes = [styles.cell]
                   if (beat % 2 === 1) classes.push(styles.cellAltBeat)

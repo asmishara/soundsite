@@ -4,6 +4,7 @@ import {
   STEPS_PER_BAR,
   STEPS_PER_BEAT,
   type ArrangementEntry,
+  type DelayTime,
   type DrumPattern,
   type DrumTrack,
   type DrumVoiceId,
@@ -28,6 +29,40 @@ export function findSection(song: Pick<Song, 'sections'>, id: string | null | un
 /** A track's notes in one section. */
 export function partNotes(track: InstrumentTrack, sectionId: string): Note[] {
   return track.notes[sectionId] ?? EMPTY_NOTES
+}
+
+const visibleCache = new WeakMap<Note[], { steps: number; notes: Note[] }>()
+
+/**
+ * A track's notes that start inside the section. Shortening a section keeps what's past the new end
+ * (so lengthening it again brings it back), but that hidden content isn't shown, played or exported.
+ */
+export function visibleNotes(track: InstrumentTrack, section: Section): Note[] {
+  const all = partNotes(track, section.id)
+  const steps = sectionSteps(section)
+  const cached = visibleCache.get(all)
+  if (cached && cached.steps === steps) return cached.notes
+  const notes = all.every((n) => n.start < steps) ? all : all.filter((n) => n.start < steps)
+  visibleCache.set(all, { steps, notes })
+  return notes
+}
+
+/** How many notes and drum hits a section keeps hidden (wholly or, for a long note, partly) past its end. */
+export function hiddenContentCount(song: Pick<Song, 'tracks' | 'sections'>, sectionId: string): number {
+  const section = findSection(song, sectionId)
+  if (!section) return 0
+  const steps = sectionSteps(section)
+  let count = 0
+  for (const track of song.tracks) {
+    if (track.kind === 'instrument') {
+      count += partNotes(track, sectionId).filter((n) => n.start + n.length > steps).length
+    } else {
+      const pattern = partPattern(track, sectionId)
+      if (!pattern) continue
+      for (const voice of DRUM_VOICE_IDS) count += pattern[voice].slice(steps).filter((v) => v > 0).length
+    }
+  }
+  return count
 }
 
 /** A drum track's pattern in one section. */
@@ -83,12 +118,28 @@ export function secondsPerStep(bpm: number): number {
   return 60 / bpm / STEPS_PER_BEAT
 }
 
+const DELAY_BEATS: Record<DelayTime, number> = { '16n': 0.25, '8n': 0.5, '8n.': 0.75, '4n': 1 }
+
+/** Delay times are musical, so they're resolved against the song's tempo. */
+export function delaySeconds(delayTime: DelayTime, bpm: number): number {
+  return (DELAY_BEATS[delayTime] * 60) / bpm
+}
+
 /**
  * Swing delays every off-beat 16th by up to 2/3 of a step (swing 1), matching Tone.js's swing curve.
  * Applied by the scheduler and by exports, so playback and exported files groove the same.
  */
 export function swingOffsetSteps(step: number, swing: number): number {
   return step % 2 === 1 ? swing * (2 / 3) : 0
+}
+
+/**
+ * How long a note lasts once swung, in steps: from its swung start to its swung end. Playback, the
+ * WAV render and the MIDI export all use this, so an off-beat note never runs into the next one.
+ */
+export function swungLengthSteps(start: number, length: number, swing: number): number {
+  const end = start + length
+  return end + swingOffsetSteps(end, swing) - (start + swingOffsetSteps(start, swing))
 }
 
 /** Whether a track can be heard, given every track's mute and solo state. */

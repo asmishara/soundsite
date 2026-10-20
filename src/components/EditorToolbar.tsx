@@ -5,6 +5,7 @@ import { INSTRUMENT_PRESETS, INSTRUMENT_PRESET_IDS } from '../model/presets'
 import type { InstrumentPresetId, Section, Track } from '../model/types'
 import { useSongStore } from '../state/songStore'
 import { SNAP_OPTIONS, useUiStore, type ChordMode } from '../state/uiStore'
+import { Select } from './common/Select'
 import { CursorIcon, MagnetIcon, PencilIcon, ZoomInIcon, ZoomOutIcon } from './common/icons'
 import styles from './EditorToolbar.module.css'
 
@@ -71,7 +72,7 @@ export function EditorToolbar({ track, section }: { track: Track; section: Secti
       <Title track={track} section={section} />
       <ComposeMenu track={track} section={section} />
 
-      <select
+      <Select
         className="control"
         value={track.preset}
         aria-label="Instrument"
@@ -83,7 +84,7 @@ export function EditorToolbar({ track, section }: { track: Track; section: Secti
             {INSTRUMENT_PRESETS[id].label}
           </option>
         ))}
-      </select>
+      </Select>
 
       <div className={styles.divider} />
 
@@ -110,31 +111,31 @@ export function EditorToolbar({ track, section }: { track: Track; section: Secti
 
       <label className={styles.field}>
         <span className="label">Snap</span>
-        <select className="control" value={ui.snap} onChange={(e) => ui.setSnap(Number(e.target.value))}>
+        <Select className="control" value={ui.snap} onChange={(e) => ui.setSnap(Number(e.target.value))}>
           {SNAP_OPTIONS.map((o) => (
             <option key={o.steps} value={o.steps}>
               {o.label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
 
       <label className={styles.field}>
         <span className="label">Length</span>
-        <select className="control" value={ui.noteLength} onChange={(e) => ui.setNoteLength(Number(e.target.value))}>
+        <Select className="control" value={ui.noteLength} onChange={(e) => ui.setNoteLength(Number(e.target.value))}>
           {LENGTH_OPTIONS.map((o) => (
             <option key={o.steps} value={o.steps}>
               {o.label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
 
       <div className={styles.divider} />
 
       <label className={styles.field}>
         <span className="label">Chord</span>
-        <select
+        <Select
           className="control"
           value={ui.chordMode}
           onChange={(e) => ui.setChordMode(e.target.value as ChordMode)}
@@ -152,8 +153,8 @@ export function EditorToolbar({ track, section }: { track: Track; section: Secti
               </option>
             ))}
           </optgroup>
-        </select>
-        <select
+        </Select>
+        <Select
           className="control"
           value={ui.chordInversion}
           disabled={!chordOn}
@@ -165,7 +166,7 @@ export function EditorToolbar({ track, section }: { track: Track; section: Secti
               {label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
 
       <button

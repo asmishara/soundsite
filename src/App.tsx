@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import styles from './App.module.css'
 import { ArrangementStrip } from './components/Arrangement/ArrangementStrip'
 import { EditorToolbar } from './components/EditorToolbar'
@@ -63,11 +63,20 @@ export default function App() {
     }
   }, [tracks, selectedTrackId])
 
-  // Likewise keep a valid arrangement block selected, preferring one that plays the same section.
+  // Likewise keep a valid arrangement block selected. Prefer another block playing the same section;
+  // if the block itself is gone (say, undoing Add or Duplicate section), the nearest block before it,
+  // which is usually the one the user came from.
+  const previousArrangement = useRef(arrangement)
   useEffect(() => {
+    const before = previousArrangement.current
+    previousArrangement.current = arrangement
     const entry = arrangement.find((e) => e.id === selectedEntryId)
     if (entry && entry.sectionId === selectedSectionId) return
-    const next = arrangement.find((e) => e.sectionId === selectedSectionId) ?? arrangement[0]
+    let next = arrangement.find((e) => e.sectionId === selectedSectionId)
+    for (let i = before.findIndex((e) => e.id === selectedEntryId) - 1; !next && i >= 0; i--) {
+      next = arrangement.find((e) => e.id === before[i].id)
+    }
+    next ??= arrangement[0]
     if (next) useUiStore.getState().selectEntry(next.id, next.sectionId)
   }, [arrangement, selectedEntryId, selectedSectionId])
 

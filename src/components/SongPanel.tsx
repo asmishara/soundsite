@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useDismiss } from '../hooks/useDismiss'
 import { MAX_NAME_LENGTH } from '../model/rules'
-import { useSaveStatus } from '../state/persistence'
+import { keepThisTabsVersion, useSaveStatus } from '../state/persistence'
 import { exportAudio, exportMidi, newSong, pickSongFile, saveSongToFile } from '../state/songFiles'
 import { useSongStore } from '../state/songStore'
 import { useUiStore } from '../state/uiStore'
@@ -78,6 +78,19 @@ function NewSongMenu() {
 
 function SaveStatus() {
   const { status, savedAt } = useSaveStatus()
+  if (status === 'conflict') {
+    return (
+      <div className={`${styles.status} ${styles.statusError}`} role="status">
+        <AlertIcon size={12} />
+        <span>
+          Not autosaving: this song changed in another tab.{' '}
+          <button className={styles.statusAction} onClick={keepThisTabsVersion}>
+            Save this tab&rsquo;s version
+          </button>
+        </span>
+      </div>
+    )
+  }
   if (status === 'error') {
     return (
       <div className={`${styles.status} ${styles.statusError}`} role="status">

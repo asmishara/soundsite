@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFollowPlayhead } from '../../hooks/useFollowPlayhead'
-import { partNotes } from '../../model/arrangement'
+import { partNotes, visibleNotes } from '../../model/arrangement'
 import { keyPrefersFlats } from '../../model/music'
 import { STEPS_PER_BAR, type InstrumentTrack, type Section } from '../../model/types'
 import { getTrack, useSongStore } from '../../state/songStore'
@@ -27,7 +27,7 @@ export function PianoRoll({ track, section }: { track: InstrumentTrack; section:
 
   const { marquee, handlers } = usePianoRollPointer(gridRef, track, section, zoom)
 
-  const notes = partNotes(track, section.id)
+  const notes = visibleNotes(track, section)
   const width = section.bars * STEPS_PER_BAR * zoom
   const height = ROW_COUNT * ROW_HEIGHT
   const selected = useMemo(() => new Set(selectedIds), [selectedIds])
@@ -71,12 +71,13 @@ export function PianoRoll({ track, section }: { track: InstrumentTrack; section:
             >
               <GridBackground songKey={songKey} zoom={zoom} />
               {ghostTracks.map((t) =>
-                partNotes(t, section.id).map((n) => <GhostNote key={n.id} note={n} zoom={zoom} color={t.color} />),
+                visibleNotes(t, section).map((n) => <GhostNote key={n.id} note={n} zoom={zoom} color={t.color} />),
               )}
               {notes.map((n) => (
                 <NoteBlock
                   key={n.id}
                   note={n}
+                  steps={section.bars * STEPS_PER_BAR}
                   zoom={zoom}
                   color={track.color}
                   selected={selected.has(n.id)}

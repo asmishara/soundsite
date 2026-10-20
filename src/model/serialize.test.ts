@@ -164,7 +164,8 @@ describe('song files', () => {
             notes: {
               s: [
                 { pitch: 200, start: 3, length: 999, velocity: 7 },
-                { pitch: 60, start: 40 }, // past the end of a 2-bar section
+                { pitch: 60, start: 40 }, // past the end of a 2-bar section: kept, hidden
+                { pitch: 61, start: 400 }, // past the longest possible section: dropped
                 { pitch: 'C4', start: 0 }, // invalid
                 { pitch: 62, start: 0 }, // missing length/velocity
               ],
@@ -193,7 +194,8 @@ describe('song files', () => {
     expect(inst.color).toMatch(/^#[0-9a-f]{6}$/i)
     expect(inst.mixer).toMatchObject({ volume: 6, pan: 0, mute: false })
     expect(partNotes(inst, sectionId).map(({ pitch, start, length, velocity }) => ({ pitch, start, length, velocity }))).toEqual([
-      { pitch: 96, start: 3, length: 29, velocity: 1 },
+      { pitch: 96, start: 3, length: 253, velocity: 1 }, // clamped to the longest possible section
+      { pitch: 60, start: 40, length: 1, velocity: 0.8 },
       { pitch: 62, start: 0, length: 1, velocity: 0.8 },
     ])
 

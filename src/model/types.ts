@@ -71,13 +71,19 @@ export type DrumPattern = Record<DrumVoiceId, number[]>
 export type InstrumentTrack = TrackBase & {
   kind: 'instrument'
   preset: InstrumentPresetId
-  /** The track's notes in each section, keyed by section id. Every section has an entry. */
+  /**
+   * The track's notes in each section, keyed by section id. Every section has an entry. Notes that
+   * start past a shortened section's end are kept but hidden (not shown, played or exported).
+   */
   notes: Record<string, Note[]>
 }
 
 export type DrumTrack = TrackBase & {
   kind: 'drums'
-  /** The track's pattern in each section, keyed by section id. Arrays are `section.bars * STEPS_PER_BAR` long. */
+  /**
+   * The track's pattern in each section, keyed by section id. Arrays are at least
+   * `section.bars * STEPS_PER_BAR` long; steps past the end are kept, hidden, when a section is shortened.
+   */
   steps: Record<string, DrumPattern>
 }
 
