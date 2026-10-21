@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState, type PointerEvent } from 'react'
+import { loopBounds } from '../../audio/loop'
 import { cue, setLoop, setPlayMode } from '../../audio/scheduler'
+import { focusedByPointer } from '../../hooks/focusOrigin'
 import { useDismiss } from '../../hooks/useDismiss'
 import {
   layoutArrangement,
@@ -54,11 +56,16 @@ function StartMarker({ layout }: { layout: ArrangementLayout }) {
 }
 
 /** The song loop on the timeline, if one is set. */
-function SongLoopBand() {
+function SongLoopBand({ totalSteps }: { totalSteps: number }) {
   const loop = useUiStore((s) => s.loop)
-  if (loop?.scope !== 'song') return null
+  // Clip to the song as it is now: removing blocks can leave part (or all) of the loop past the end.
+  const bounds = loop?.scope === 'song' ? loopBounds(loop, totalSteps) : null
+  if (!bounds) return null
   return (
-    <div className={styles.loopBand} style={{ left: loop.start * PX_PER_STEP, width: (loop.end - loop.start) * PX_PER_STEP }} />
+    <div
+      className={styles.loopBand}
+      style={{ left: bounds.start * PX_PER_STEP, width: (bounds.end - bounds.start) * PX_PER_STEP }}
+    />
   )
 }
 
@@ -114,7 +121,7 @@ function Timeline({ layout }: { layout: ArrangementLayout }) {
         setPreview(null)
       }}
     >
-      <SongLoopBand />
+      <SongLoopBand totalSteps={layout.totalSteps} />
       {preview && (
         <div
           className={`${styles.loopBand} ${styles.loopPreview}`}
@@ -354,7 +361,11 @@ export function ArrangementStrip() {
                 onPointerDown={(e) => onBlockPointerDown(e, p)}
                 onDoubleClick={() => setRenaming(p.entry.id)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
+                  // Keys typed in the rename box or pressed on the options button are theirs.
+                  if (e.target !== e.currentTarget) return
+                  // After a mouse click the block has focus but Space should still play from the
+                  // clicked bar, so Space only selects the block when it was reached with the keyboard.
+                  if (e.key === 'Enter' || (e.key === ' ' && !focusedByPointer(e.currentTarget))) {
                     e.preventDefault()
                     useUiStore.getState().selectEntry(p.entry.id, p.section.id, 0)
                     cue(0)

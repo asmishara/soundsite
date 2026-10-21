@@ -1,5 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from 'react'
-import { useSongStore } from '../../state/songStore'
+import { focusedByPointer } from '../../hooks/focusOrigin'
+import { useGestureTransaction } from '../../hooks/useGestureTransaction'
 import styles from './Knob.module.css'
 
 type KnobProps = {
@@ -46,6 +47,7 @@ export function Knob({
   size = 34,
 }: KnobProps) {
   const drag = useRef<{ y: number; value: number } | null>(null)
+  const gesture = useGestureTransaction()
   // Latest value, updated immediately on change so repeated key presses build on each other
   // even before the parent re-renders.
   const latest = useRef(value)
@@ -65,11 +67,12 @@ export function Knob({
     e.currentTarget.setPointerCapture(e.pointerId)
     e.currentTarget.focus()
     drag.current = { y: e.clientY, value }
-    useSongStore.getState().beginTransaction()
+    gesture.begin()
   }
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag.current) return
+    gesture.keepOpen()
     const pixelsForFullRange = e.shiftKey ? 600 : 150
     onChange(clamp(drag.current.value + ((drag.current.y - e.clientY) / pixelsForFullRange) * range))
   }
@@ -77,10 +80,12 @@ export function Knob({
   const onPointerUp = () => {
     if (!drag.current) return
     drag.current = null
-    useSongStore.getState().endTransaction()
+    gesture.end()
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    // After a mouse drag the arrows are for the editor (transpose, nudge), not this knob.
+    if (focusedByPointer(e.currentTarget)) return
     const step = range / (e.shiftKey ? 200 : 50)
     let next: number
     if (e.key === 'ArrowUp' || e.key === 'ArrowRight') next = clamp(latest.current + step)
@@ -108,6 +113,7 @@ export function Knob({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onLostPointerCapture={onPointerUp}
         onDoubleClick={() => onChange(defaultValue)}
         onKeyDown={onKeyDown}
       >

@@ -1,4 +1,4 @@
-import { useSongStore } from '../../state/songStore'
+import { useGestureTransaction } from '../../hooks/useGestureTransaction'
 import styles from './Fader.module.css'
 
 type FaderProps = {
@@ -25,8 +25,7 @@ export function Fader({
   format,
   orientation = 'vertical',
 }: FaderProps) {
-  const begin = () => useSongStore.getState().beginTransaction()
-  const end = () => useSongStore.getState().endTransaction()
+  const gesture = useGestureTransaction()
 
   return (
     <div className={`${styles.fader} ${styles[orientation]}`}>
@@ -40,12 +39,12 @@ export function Fader({
         aria-label={label}
         aria-valuetext={format(value)}
         title={`${label}: ${format(value)} (double-click to reset)`}
-        onPointerDown={begin}
-        onPointerUp={end}
-        onPointerCancel={end}
-        onChange={(e) => onChange(Number(e.target.value))}
+        {...gesture.rangeHandlers}
+        onChange={(e) => {
+          gesture.keepOpen()
+          onChange(Number(e.target.value))
+        }}
         onDoubleClick={() => onChange(defaultValue)}
-        onKeyDown={(e) => e.stopPropagation()}
       />
       <span className={styles.readout}>{format(value)}</span>
     </div>

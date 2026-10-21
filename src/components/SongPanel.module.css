@@ -123,3 +123,12 @@
     transform: rotate(360deg);
   }
 }
+
+.statusAction {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+}

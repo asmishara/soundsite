@@ -1,5 +1,6 @@
 import * as Tone from 'tone'
 import type { InstrumentPresetId } from '../model/types'
+import { noteScheduler } from './noteScheduler'
 
 export type InstrumentVoice = {
   output: Tone.ToneAudioNode
@@ -21,11 +22,12 @@ function keepVoicesOffline(synth: Tone.PolySynth): void {
 function voice<S extends Tone.PolySynth>(synth: S, chain: Tone.ToneAudioNode[] = []): InstrumentVoice {
   keepVoicesOffline(synth)
   if (chain.length > 0) synth.chain(...chain)
+  const notes = noteScheduler(synth, synth.context, () => synth.disposed)
   return {
     output: chain.length > 0 ? chain[chain.length - 1] : synth,
     trigger: (pitch, duration, time, velocity) =>
-      synth.triggerAttackRelease(Tone.mtof(pitch as Tone.Unit.MidiNote), duration, time, velocity),
-    releaseAll: () => synth.releaseAll(),
+      notes.trigger(Tone.mtof(pitch as Tone.Unit.MidiNote), duration, time, velocity),
+    releaseAll: notes.releaseAll,
     dispose: () => {
       synth.dispose()
       chain.forEach((node) => node.dispose())

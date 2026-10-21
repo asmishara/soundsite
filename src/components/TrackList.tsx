@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { INSTRUMENT_PRESETS, INSTRUMENT_PRESET_IDS } from '../model/presets'
 import type { Track } from '../model/types'
 import { useDismiss } from '../hooks/useDismiss'
-import { partNotes } from '../model/arrangement'
+import { findSection, visibleNotes } from '../model/arrangement'
+import { MAX_NAME_LENGTH } from '../model/rules'
 import { useSongStore } from '../state/songStore'
+import { noticeWithUndo } from '../state/undoNotice'
 import { useUiStore } from '../state/uiStore'
 import { ChevronDownIcon, ChevronUpIcon, DrumIcon, KeysIcon, PlusIcon, TrashIcon } from './common/icons'
 import styles from './TrackList.module.css'
@@ -44,11 +46,12 @@ function ColorSwatch({ color, label, onCommit }: { color: string; label: string;
 function TrackRow({ track, index, count }: { track: Track; index: number; count: number }) {
   const selected = useUiStore((s) => s.selectedTrackId === track.id)
   const sectionId = useUiStore((s) => s.selectedSectionId)
+  const section = useSongStore((s) => findSection(s.song, sectionId))
   const [editing, setEditing] = useState(false)
   const { setMixer, updateTrack, removeTrack, moveTrack } = useSongStore.getState()
 
   // Note counts are for the section being edited.
-  const noteCount = track.kind === 'instrument' && sectionId ? partNotes(track, sectionId).length : 0
+  const noteCount = track.kind === 'instrument' && section ? visibleNotes(track, section).length : 0
   const subtitle =
     track.kind === 'drums'
       ? 'Drum kit'
@@ -70,6 +73,7 @@ function TrackRow({ track, index, count }: { track: Track; index: number; count:
         {editing ? (
           <input
             className={styles.rename}
+            maxLength={MAX_NAME_LENGTH}
             defaultValue={track.name}
             autoFocus
             aria-label="Track name"
@@ -106,7 +110,14 @@ function TrackRow({ track, index, count }: { track: Track; index: number; count:
           >
             <ChevronDownIcon size={12} />
           </button>
-          <button className={styles.mini} onClick={() => removeTrack(track.id)} aria-label={`Delete ${track.name}`}>
+          <button
+            className={styles.mini}
+            onClick={() => {
+              removeTrack(track.id)
+              noticeWithUndo(`Deleted ${track.name}`)
+            }}
+            aria-label={`Delete ${track.name}`}
+          >
             <TrashIcon size={12} />
           </button>
         </div>

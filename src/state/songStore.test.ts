@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { partNotes, partPattern } from '../model/arrangement'
+import { hiddenContentCount, partNotes, partPattern, songEvents, visibleNotes } from '../model/arrangement'
 import { createEmptySong } from '../model/factory'
+import { MAX_NAME_LENGTH } from '../model/rules'
 import type { DrumTrack, InstrumentTrack } from '../model/types'
 import { useSongStore, type PartRef } from './songStore'
 
@@ -81,7 +82,7 @@ describe('notes', () => {
 })
 
 describe('section length', () => {
-  it('trims notes and resizes drum steps in that section only', () => {
+  it('hides content past the end when shortened and brings it back when lengthened', () => {
     const drumId = store().addDrumTrack()
     const other = store().addSection(null).sectionId
     const drumPart = { trackId: drumId, sectionId: part.sectionId }
@@ -92,20 +93,76 @@ describe('section length', () => {
     store().setDrumStep(drumPart, 'kick', 40, 1)
 
     store().setSectionBars(part.sectionId, 2)
-    expect(notes()).toHaveLength(1)
-    expect(notes()[0].length).toBe(22)
-    expect(partPattern(drums(drumId), part.sectionId)!.kick).toHaveLength(32)
-    expect(partPattern(drums(drumId), other)!.kick).toHaveLength(64)
+    const section = firstSection()
+    expect(notes()).toHaveLength(2) // nothing is deleted
+    expect(visibleNotes(instrument(trackId), section).map((n) => n.pitch)).toEqual([60])
+    // The note at step 40, the tail of the long note and the kick at step 40.
+    expect(hiddenContentCount(song(), section.id)).toBe(3)
+    expect(partPattern(drums(drumId), other)!.kick).toHaveLength(64) // other sections untouched
 
-    store().setSectionBars(part.sectionId, 3)
-    expect(partPattern(drums(drumId), part.sectionId)!.kick).toHaveLength(48)
-    expect(partPattern(drums(drumId), part.sectionId)!.kick[40]).toBe(0)
+    // Hidden content isn't played or exported.
+    const events = songEvents(song())
+    expect(events.filter((e) => e.step >= 32 && e.step < 64 && e.type === 'note')).toHaveLength(0)
+    expect(events.find((e) => e.type === 'note' && e.pitch === 60)).toMatchObject({ length: 22 })
 
-    store().undo()
-    store().undo()
-    expect(firstSection().bars).toBe(4)
-    expect(notes()).toHaveLength(2)
+    store().setSectionBars(part.sectionId, 4)
+    expect(visibleNotes(instrument(trackId), firstSection())).toHaveLength(2)
+    expect(notes().find((n) => n.pitch === 60)!.length).toBe(30) // the long note is whole again
     expect(partPattern(drums(drumId), part.sectionId)!.kick[40]).toBe(1)
+    expect(hiddenContentCount(song(), section.id)).toBe(0)
+  })
+
+  it("keeps the hidden tail of a note that's moved or transposed while the section is short", () => {
+    const [id] = store().addNotes(part, [{ pitch: 60, start: 20, length: 30, velocity: 0.8 }])
+    store().setSectionBars(part.sectionId, 2)
+    store().transformNotes(part, [id], (n) => ({ pitch: n.pitch + 1, start: n.start - 4 }))
+    store().setSectionBars(part.sectionId, 4)
+    expect(notes()[0]).toMatchObject({ pitch: 61, start: 16, length: 30 })
+  })
+
+  it("doesn't edit notes hidden past the end", () => {
+    const [id] = store().addNotes(part, [{ pitch: 60, start: 40, length: 4, velocity: 0.8 }])
+    store().setSectionBars(part.sectionId, 2)
+    store().updateNotes(part, { [id]: { start: 39, pitch: 62 } })
+    expect(notes()[0]).toMatchObject({ pitch: 60, start: 40 })
+  })
+
+  it('keeps hidden content when a section is filled with a new beat or chords', () => {
+    const drumId = store().addDrumTrack()
+    const drumPart = { trackId: drumId, sectionId: part.sectionId }
+    store().setDrumStep(drumPart, 'kick', 40, 1)
+    store().addNotes(part, [
+      { pitch: 60, start: 0, length: 4, velocity: 0.8 },
+      { pitch: 62, start: 40, length: 4, velocity: 0.8 },
+    ])
+    store().setSectionBars(part.sectionId, 2)
+
+    const pattern = partPattern(drums(drumId), part.sectionId)!
+    store().setDrumPattern(drumPart, { ...pattern, snare: Array.from({ length: 32 }, (_, i) => (i % 8 === 4 ? 1 : 0)) })
+    store().replaceNotes(part, null, [{ pitch: 67, start: 0, length: 8, velocity: 0.8 }])
+
+    store().setSectionBars(part.sectionId, 4)
+    expect(partPattern(drums(drumId), part.sectionId)!.kick[40]).toBe(1)
+    expect(partPattern(drums(drumId), part.sectionId)!.snare[4]).toBe(1)
+    expect(notes().map((n) => n.pitch).sort()).toEqual([62, 67]) // the visible note was replaced
+  })
+
+  it('drops new notes that would start past the end instead of piling them onto the last step', () => {
+    const total = firstSection().bars * 16
+    const ids = store().replaceNotes(part, null, [
+      { pitch: 60, start: total - 2, length: 2, velocity: 0.8 },
+      { pitch: 62, start: total, length: 2, velocity: 0.8 },
+      { pitch: 64, start: total + 6, length: 2, velocity: 0.8 },
+    ])
+    expect(ids).toHaveLength(1)
+    expect(notes().map((n) => [n.pitch, n.start])).toEqual([[60, total - 2]])
+    expect(store().addNotes(part, [{ pitch: 65, start: total, length: 1, velocity: 0.8 }])).toEqual([])
+  })
+
+  it('pads drum patterns when a section grows past anything it has stored', () => {
+    const drumId = store().addDrumTrack()
+    store().setSectionBars(part.sectionId, 8)
+    expect(partPattern(drums(drumId), part.sectionId)!.snare).toHaveLength(128)
   })
 })
 
@@ -258,13 +315,39 @@ describe('history', () => {
   it('records a transaction as a single entry', () => {
     const [id] = store().addNotes(part, [{ pitch: 60, start: 0, length: 4, velocity: 0.8 }])
     const before = store().past.length
-    store().beginTransaction()
+    const tx = store().beginTransaction()
     for (let i = 1; i <= 5; i++) store().updateNotes(part, { [id]: { start: i } })
-    store().endTransaction()
+    store().endTransaction(tx)
     expect(store().past.length).toBe(before + 1)
     expect(notes()[0].start).toBe(5)
     store().undo()
     expect(notes()[0].start).toBe(0)
+  })
+
+  it('joins nested transactions and ignores a stray end from another gesture', () => {
+    const outer = store().beginTransaction()
+    store().setBpm(90)
+    store().transact(() => store().setBpm(95)) // a tool writing while a drag is open joins it
+    store().endTransaction(12345) // not an open transaction: ignored
+    store().setBpm(100)
+    expect(store().past).toHaveLength(0)
+    store().endTransaction(outer)
+    expect(store().past).toHaveLength(1)
+    store().undo()
+    expect(song().bpm).toBe(120)
+  })
+
+  it('closes an open transaction on undo, so the interrupted drag stops editing', () => {
+    store().setBpm(90)
+    const tx = store().beginTransaction()
+    store().setBpm(100)
+    store().undo()
+    expect(store().isTransactionOpen(tx)).toBe(false)
+    expect(song().bpm).toBe(90) // the drag's change was committed as one step, then undone
+    store().endTransaction(tx) // the gesture ending later is harmless
+    store().redo()
+    expect(song().bpm).toBe(100)
+    expect(store().future).toHaveLength(0)
   })
 
   it('replaces the whole song as one undoable step', () => {
@@ -289,14 +372,24 @@ describe('history', () => {
 
   it('records nothing for an empty transaction and can cancel', () => {
     const before = store().past.length
-    store().beginTransaction()
-    store().endTransaction()
+    store().endTransaction(store().beginTransaction())
     expect(store().past.length).toBe(before)
 
-    store().beginTransaction()
+    const tx = store().beginTransaction()
     store().setBpm(150)
-    store().cancelTransaction()
+    store().cancelTransaction(tx)
     expect(song().bpm).toBe(120)
     expect(store().past.length).toBe(before)
+    expect(store().isTransactionOpen(tx)).toBe(false)
+  })
+})
+
+describe('track edits', () => {
+  it('caps track names and ignores invalid colors', () => {
+    store().updateTrack(trackId, { name: 'x'.repeat(200), color: 'red' })
+    expect(instrument(trackId).name).toHaveLength(MAX_NAME_LENGTH)
+    expect(instrument(trackId).color).toMatch(/^#[0-9a-f]{6}$/i)
+    store().updateTrack(trackId, { color: '#123abc' })
+    expect(instrument(trackId).color).toBe('#123abc')
   })
 })

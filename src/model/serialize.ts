@@ -174,7 +174,7 @@ function normalizeTrack(raw: unknown, sections: Section[], fileIdOf: Map<string,
     for (const section of sections) {
       notes[section.id] = list(partIn(raw.notes, section))
         .slice(0, MAX_NOTES_PER_PART)
-        .map((n) => normalizeNote(n, section.bars))
+        .map((n) => normalizeNote(n))
         .filter((n): n is Note => n !== null)
     }
     return {
@@ -191,22 +191,33 @@ function normalizeTrack(raw: unknown, sections: Section[], fileIdOf: Map<string,
   return null
 }
 
+/**
+ * A drum pattern at least as long as its section. Steps past the end (kept when a section was
+ * shortened) are preserved up to the longest possible section, so lengthening it restores them.
+ */
 function normalizePattern(raw: unknown, bars: number): DrumPattern {
   const pattern = emptyDrumSteps(bars)
   if (!isObject(raw)) return pattern
+  const minSteps = bars * STEPS_PER_BAR
   for (const voice of DRUM_VOICE_IDS) {
     const source = raw[voice]
-    if (Array.isArray(source)) pattern[voice] = pattern[voice].map((_, i) => num(source[i], 0, 0, 1))
+    if (!Array.isArray(source)) continue
+    const length = Math.max(minSteps, Math.min(source.length, MAX_BARS * STEPS_PER_BAR))
+    pattern[voice] = Array.from({ length }, (_, i) => num(source[i], 0, 0, 1))
   }
   return pattern
 }
 
-function normalizeNote(raw: unknown, bars: number): Note | null {
+/**
+ * Notes past the end of their section are kept (a shortened section hides them rather than
+ * deleting them), up to the longest possible section. Anything later would be clamped onto the
+ * last step, so it's dropped instead.
+ */
+function normalizeNote(raw: unknown): Note | null {
   if (!isObject(raw)) return null
   const { pitch, start } = raw
   if (!isFiniteNumber(pitch) || !isFiniteNumber(start)) return null
-  // Notes that start after the section ends would be clamped onto its last step; drop them instead.
-  if (start < 0 || start >= bars * STEPS_PER_BAR) return null
+  if (start < 0 || start >= MAX_BARS * STEPS_PER_BAR) return null
   const note: Note = {
     id: newId('note'),
     pitch,
@@ -214,7 +225,7 @@ function normalizeNote(raw: unknown, bars: number): Note | null {
     length: isFiniteNumber(raw.length) ? raw.length : 1,
     velocity: isFiniteNumber(raw.velocity) ? raw.velocity : 0.8,
   }
-  sanitizeNote(note, bars)
+  sanitizeNote(note, MAX_BARS)
   return note
 }
 

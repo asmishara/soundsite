@@ -9,6 +9,7 @@ import {
   secondsPerStep,
   sectionSteps,
   swingOffsetSteps,
+  swungLengthSteps,
   type Placement,
 } from '../model/arrangement'
 import { DRUM_VOICE_IDS } from '../model/presets'
@@ -70,13 +71,16 @@ function activeLoop(song: Song, section: Section): LoopBounds | null {
 /** Plays every note and drum hit that starts on `local` in `section`. */
 function triggerStep(song: Song, section: Section, local: number, time: number): void {
   const stepSeconds = secondsPerStep(song.bpm)
+  const steps = sectionSteps(section)
   const at = time + swingOffsetSteps(local, song.swing) * stepSeconds
   for (const track of song.tracks) {
     if (track.kind === 'instrument') {
       const starting = notesByStart(partNotes(track, section.id)).get(local)
       if (!starting) continue
       for (const note of starting) {
-        engine.triggerNote(track.id, note.pitch, note.length * stepSeconds * 0.98, at, note.velocity)
+        // A note running past a shortened section's end stops at the end.
+        const length = swungLengthSteps(local, Math.min(note.length, steps - local), song.swing)
+        engine.triggerNote(track.id, note.pitch, length * stepSeconds * 0.98, at, note.velocity)
       }
     } else {
       const pattern = partPattern(track, section.id)
@@ -148,7 +152,15 @@ export function isPlaying(): boolean {
 }
 
 export async function play(): Promise<void> {
-  await engine.start()
+  try {
+    await engine.start()
+  } catch (err) {
+    console.error('Audio could not start', err)
+    useUiStore
+      .getState()
+      .showNotice("Sound couldn't start in this browser. Check that the tab isn't muted, then press Play again.", 'error')
+    return
+  }
   if (repeatId !== null) return
   mode = useUiStore.getState().playMode
   position = startPosition()

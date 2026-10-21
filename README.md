@@ -17,6 +17,7 @@ A browser-based music composer: sketch melodies, chords and beats, then mix them
   - **Chord mode** stamps diatonic triads or 7ths (the right chord for each scale degree), or a fixed quality (maj, min, 7, maj7, …), with inversions. The chord name and roman numeral (e.g. `Fm · iv`) are shown in the toolbar.
 - **Arrangement:** build a song from sections (Intro, Verse, Chorus…) shown as blocks in the strip under the transport bar.
   - Each section has its own notes and drum patterns on every track, and its own length (1–16 bars, set with **Bars**). Instruments and the mixer are shared across the song.
+  - Shortening a section hides what's past the new end instead of deleting it; make it longer again to bring it back.
   - Click a block to edit that section. Drag blocks to reorder them, and double-click one to rename it.
   - A block's **⋯** menu can **Repeat** it (a linked copy: edits apply to both, marked with a link icon), **Duplicate** it (an independent copy to vary), or remove it.
   - **+ Section** adds an empty section at the end.
@@ -43,12 +44,14 @@ A browser-based music composer: sketch melodies, chords and beats, then mix them
   - **New:** start a blank song (keys + drums) or reopen the demo.
   - Opening a file or starting a new song can be undone (Ctrl+Z, or **Undo** in the notification), so nothing is lost by accident.
   - Files are checked when opened: values out of range are repaired, unknown instruments fall back to a default, and files from a newer version are refused with a clear message.
+  - If the same song is open in two tabs and one saves, the other stops autosaving and asks you to reload or keep its own version, so neither silently overwrites the other.
+  - An autosave that can't be read (for example one made by a newer version) is kept and can be downloaded, and if the app ever crashes it offers to download your song before reloading.
 
 > Autosave uses this browser's local storage, so it doesn't follow you to another browser or device. Use **Save** to keep a copy or share a song. Song files from before arrangements existed open as a single section.
 
 ## Getting started
 
-Requires Node 20+.
+Requires Node 22.12 or newer (CI uses Node 24; see `.nvmrc`).
 
 ```bash
 npm install

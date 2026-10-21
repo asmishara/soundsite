@@ -8,6 +8,7 @@ import {
   songDurationSeconds,
   songEvents,
   swingOffsetSteps,
+  swungLengthSteps,
 } from './arrangement'
 import { createDemoSong } from './demoSong'
 import { createDrumTrack, createEmptySong, createEntry, createInstrumentTrack, createNote, createSection } from './factory'
@@ -78,6 +79,13 @@ describe('song events', () => {
 })
 
 describe('swing', () => {
+  it('ends swung notes on the swung grid', () => {
+    expect(swungLengthSteps(0, 2, 0.6)).toBe(2) // on-beat to on-beat: unchanged
+    expect(swungLengthSteps(1, 1, 0.6)).toBeCloseTo(1 - 0.4) // a swung off-beat note ends on the next on-beat
+    expect(swungLengthSteps(0, 1, 0.6)).toBeCloseTo(1 + 0.4) // an on-beat note runs to the swung off-beat
+    expect(swungLengthSteps(1, 2, 0)).toBe(2)
+  })
+
   it('delays only off-beat 16ths', () => {
     expect(swingOffsetSteps(0, 0.6)).toBe(0)
     expect(swingOffsetSteps(2, 0.6)).toBe(0)

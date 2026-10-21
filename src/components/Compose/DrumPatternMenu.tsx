@@ -4,7 +4,7 @@ import { DRUM_STYLES, buildDrumPattern } from '../../model/compose/drumPatterns'
 import type { DrumTrack, Section } from '../../model/types'
 import { useComposeStore } from '../../state/composeStore'
 import { useSongStore } from '../../state/songStore'
-import { useUiStore } from '../../state/uiStore'
+import { noticeWithUndo } from '../../state/undoNotice'
 import { SparkleIcon } from '../common/icons'
 import styles from './Compose.module.css'
 
@@ -22,10 +22,7 @@ export function DrumPatternMenu({ track, section }: { track: DrumTrack; section:
       .getState()
       .setDrumPattern({ trackId: track.id, sectionId: section.id }, buildDrumPattern(style, section.bars, { crash, fill }))
     set({ lastDrumStyle: styleId })
-    useUiStore.getState().showNotice(`${style.name} beat on ${track.name} in ${section.name}`, 'info', {
-      label: 'Undo',
-      run: () => useSongStore.getState().undo(),
-    })
+    noticeWithUndo(`${style.name} beat on ${track.name} in ${section.name}`)
   }
 
   return (
